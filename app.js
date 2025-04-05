@@ -59,7 +59,7 @@ app.use((error, req, res, next) => {
   if (error.code === 11000) {
     return res.status(400).json({
       status: false,
-      message: "Email already exists",
+      errors: { message: "Email already exists" },
     });
   }
 
@@ -67,14 +67,14 @@ app.use((error, req, res, next) => {
   if (error.statusCode) {
     return res.status(error.statusCode).json({
       status: false,
-      message: error.message,
+      errors: { message: error.message },
     });
   }
 
   // Handle other unexpected errors
   res.status(500).json({
     status: false,
-    message: "Internal server error",
+    errors: { message: "Internal server error" },
   });
 });
 

@@ -7,6 +7,7 @@ try {
 
   const command = "collMod";
 
+  // user schema json validation
   await db.command({
     [command]: "users",
     validator: {
@@ -22,7 +23,7 @@ try {
             minLength: 3,
             maxLength: 30,
             description:
-              "name field should a string with at least 3 characters",
+              "name field should a string with at least 3 and at most 30 characters",
           },
           email: {
             bsonType: "string",
@@ -35,6 +36,47 @@ try {
           },
           rootFolderId: {
             bsonType: "objectId",
+          },
+          createdAt: {
+            bsonType: "date",
+          },
+          updatedAt: {
+            bsonType: "date",
+          },
+          __v: {
+            bsonType: "int",
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    validationAction: "error",
+    validationLevel: "strict",
+  });
+
+  // folder schema json validation
+  await db.command({
+    [command]: "folders",
+    validator: {
+      $jsonSchema: {
+        bsonType: "object",
+        required: ["_id", "name", "userId", "parentFolderId"],
+        properties: {
+          _id: {
+            bsonType: "objectId",
+          },
+          name: {
+            bsonType: "string",
+            minLength: 1,
+            maxLength: 30,
+            description:
+              "name field should a string with at least 1 and at most 30 characters",
+          },
+          userId: {
+            bsonType: "objectId",
+          },
+          parentFolderId: {
+            bsonType: ["objectId", "null"],
           },
           createdAt: {
             bsonType: "date",

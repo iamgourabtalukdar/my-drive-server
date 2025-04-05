@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import User from "../models/userModel.js";
+import Folder from "../models/folderModel.js";
 
 const userInputValidation = {
   name: {
@@ -76,11 +77,47 @@ export async function signup(req, res, next) {
         .json({ status: false, errors: { email: "Email already exists" } });
     }
 
-    const userId = new mongoose.Types.ObjectId();
-    const rootFolderId = new mongoose.Types.ObjectId();
-    await User.insertOne({ _id: userId, name, email, password, rootFolderId });
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    return res.status(201).json({ status: true, message: "User created" });
+    try {
+      const userId = new mongoose.Types.ObjectId();
+      const rootFolderId = new mongoose.Types.ObjectId();
+      await User.create(
+        [
+          {
+            _id: userId,
+            name,
+            email,
+            password,
+            rootFolderId,
+          },
+        ],
+        { session }
+      );
+
+      //check this
+      await Folder.create(
+        [
+          {
+            _id: rootFolderId,
+            name: `root-${email}`,
+            userId,
+            parentFolderId: null,
+          },
+        ],
+        { session }
+      );
+
+      await session.commitTransaction();
+      return res.status(201).json({ status: true, message: "User created" });
+    } catch (error) {
+      console.log(error);
+      await session.abortTransaction();
+      next(error);
+    } finally {
+      await session.endSession();
+    }
   } catch (error) {
     next(error);
   }
