@@ -78,6 +78,9 @@ try {
           parentFolderId: {
             bsonType: ["objectId", "null"],
           },
+          starred: {
+            bsonType: "bool",
+          },
           createdAt: {
             bsonType: "date",
           },

@@ -18,6 +18,10 @@ const folderSchema = new Schema(
       ref: "Folder",
       default: null,
     },
+    starred: {
+      type: Boolean,
+      default: false,
+    },
   },
   { strict: "throw", timestamps: true }
 );
