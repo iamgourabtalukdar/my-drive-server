@@ -1,5 +1,6 @@
 import express from "express";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 import userRoutes from "./routes/userRoutes.js";
 import folderRoutes from "./routes/folderRoutes.js";
 import connectToDB from "./config/db.js";
@@ -11,15 +12,23 @@ const HOST = "127.0.0.5";
 const app = express();
 
 //cors
-app.use((req, res, next) => {
-  res.set({
-    "Access-Control-Allow-Origin": "http://localhost:5175",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE",
-    "Access-Control-Allow-Credentials": "true",
-  });
-  next();
-});
+app.use(
+  cors({
+    origin: "http://localhost:5175",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Parent-Folder-Id"],
+    credentials: true,
+  })
+);
+// app.use((req, res, next) => {
+//   res.set({
+//     "Access-Control-Allow-Origin": "http://localhost:5175",
+//     "Access-Control-Allow-Headers": "Content-Type, parentfolderid",
+//     "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE",
+//     "Access-Control-Allow-Credentials": "true",
+//   });
+//   next();
+// });
 
 // Middlewares
 app.use(express.json());

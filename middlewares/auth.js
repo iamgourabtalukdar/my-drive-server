@@ -1,3 +1,5 @@
+import User from "../models/userModel.js";
+
 export function clearAuthCookie(req = null, res, cookieName) {
   const options = {
     path: "/",
@@ -16,7 +18,7 @@ export function clearAuthCookie(req = null, res, cookieName) {
   res.clearCookie(cookieName, options);
 }
 
-export function checkAuth(req, res, next) {
+export async function checkAuth(req, res, next) {
   const { token } = req.signedCookies || {};
 
   if (!token) {
@@ -46,8 +48,16 @@ export function checkAuth(req, res, next) {
       });
     }
 
-    // Attach user ID to request for downstream middleware
-    req.userId = uid;
+    const foundUser = await User.findById(uid).select("-password").lean();
+    if (!foundUser) {
+      clearAuthCookie(req, res, "token");
+      return res.status(400).json({
+        status: false,
+        message: "No user found",
+      });
+    }
+    // Attach user  to request for downstream middleware
+    req.user = foundUser;
     next();
   } catch (err) {
     // Proper way to clear cookie on parsing errors
