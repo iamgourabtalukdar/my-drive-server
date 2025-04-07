@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import userRoutes from "./routes/userRoutes.js";
 import folderRoutes from "./routes/folderRoutes.js";
+import fileRouters from "./routes/fileRoutes.js";
 import connectToDB from "./config/db.js";
 import { checkAuth } from "./middlewares/auth.js";
 
@@ -16,7 +17,7 @@ app.use(
   cors({
     origin: "http://localhost:5175",
     methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Parent-Folder-Id"],
+    allowedHeaders: ["Content-Type", "Parent-Folder-Id", "File-Count"],
     credentials: true,
   })
 );
@@ -37,6 +38,7 @@ app.use(cookieParser("G0ur@b"));
 // Routes
 app.use("/user", userRoutes);
 app.use("/folder", checkAuth, folderRoutes);
+app.use("/files", checkAuth, fileRouters);
 
 // 404 Handler
 app.use((req, res) => {

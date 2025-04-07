@@ -97,6 +97,59 @@ try {
     validationAction: "error",
     validationLevel: "strict",
   });
+
+  // file schema json validation
+  await db.command({
+    [command]: "files",
+    validator: {
+      $jsonSchema: {
+        bsonType: "object",
+        required: ["_id", "name", "size", "userId", "parentFolderId"],
+        properties: {
+          _id: {
+            bsonType: "objectId",
+          },
+          name: {
+            bsonType: "string",
+            minLength: 1,
+            maxLength: 50,
+            description:
+              "name field should a string with at least 1 and at most 50 characters",
+          },
+          size: {
+            bsonType: "number",
+          },
+          extension: {
+            bsonType: "string",
+          },
+          mimetype: {
+            bsonType: "string",
+          },
+          userId: {
+            bsonType: "objectId",
+          },
+          parentFolderId: {
+            bsonType: "objectId",
+          },
+          starred: {
+            bsonType: "bool",
+          },
+          createdAt: {
+            bsonType: "date",
+          },
+          updatedAt: {
+            bsonType: "date",
+          },
+          __v: {
+            bsonType: "int",
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    validationAction: "error",
+    validationLevel: "strict",
+  });
 } catch (err) {
   console.log(err);
 }
