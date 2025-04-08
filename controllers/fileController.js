@@ -3,6 +3,59 @@ import path from "path";
 import Folder from "../models/folderModel.js";
 import File from "../models/fileModel.js";
 
+export async function serveFile(req, res, next) {
+  try {
+    const fileId = req.params.fileId;
+
+    if (!fileId || !mongoose.isValidObjectId(fileId)) {
+      return res
+        .status(400)
+        .json({ status: false, errors: { message: "Invalid file ID" } });
+    }
+
+    const foundFile = await File.findOne({ _id: fileId, userId: req.user._id })
+      .select("name size extension userId mimetype")
+      .lean();
+
+    if (!foundFile) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "File Not Found Or You don't have the permission" },
+      });
+    }
+    const fullFilePath = path.resolve(
+      req.STORAGE_BASE_DIR,
+      foundFile._id + foundFile.extension
+    );
+    // checking path vulnerability
+    if (!fullFilePath.startsWith(req.STORAGE_BASE_DIR)) {
+      return res.status(403).json({ error: "Access Denied!" });
+    }
+
+    res.set("Content-Type", foundFile.mimetype);
+
+    // if it is a download request
+    if (req.query.action === "download") {
+      res.set(
+        "Content-Disposition",
+        `Attachment; filename=${foundFile.name}${foundFile.extension}`
+      );
+    } else {
+      res.set(
+        "Content-Disposition",
+        `inline; filename=${foundFile.name}${foundFile.extension}`
+      );
+    }
+    // send the file
+    res.sendFile(fullFilePath, (error) => {
+      if (error && !res.headersSent) {
+        res.status(404).json({ error: "File not found!" });
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+}
 export async function uploadFiles(req, res, next) {
   try {
     const uploadedFiles = req.files;

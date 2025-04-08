@@ -1,4 +1,5 @@
 import express from "express";
+import path from "path";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import userRoutes from "./routes/userRoutes.js";
@@ -6,9 +7,13 @@ import folderRoutes from "./routes/folderRoutes.js";
 import fileRouters from "./routes/fileRoutes.js";
 import connectToDB from "./config/db.js";
 import { checkAuth } from "./middlewares/auth.js";
+import { fileURLToPath } from "url";
 
 const PORT = 4000;
 const HOST = "127.0.0.5";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const STORAGE_BASE_DIR = path.resolve(__dirname, "uploads");
 
 const app = express();
 
@@ -35,6 +40,11 @@ app.use(
 app.use(express.json());
 app.use(cookieParser("G0ur@b"));
 
+//custom data validation
+app.use((req, res, next) => {
+  req.STORAGE_BASE_DIR = STORAGE_BASE_DIR;
+  next();
+});
 // Routes
 app.use("/user", userRoutes);
 app.use("/folder", checkAuth, folderRoutes);

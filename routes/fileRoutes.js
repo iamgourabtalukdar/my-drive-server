@@ -1,7 +1,7 @@
 import { Router } from "express";
 import path from "path";
 import multer from "multer";
-import { uploadFiles } from "../controllers/fileController.js";
+import { serveFile, uploadFiles } from "../controllers/fileController.js";
 import { generateFileIds } from "../middlewares/generateFileIDs.js";
 
 // Multer setup
@@ -33,6 +33,7 @@ const upload = multer({
 
 const router = Router();
 // Route
+router.get("/:fileId", serveFile);
 router.post("/upload", generateFileIds, upload.array("files"), uploadFiles);
 
 export default router;
