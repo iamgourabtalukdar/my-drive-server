@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import Folder from "../models/folderModel.js";
+import File from "../models/fileModel.js";
 import { clearAuthCookie } from "../utils/clearAuthCookies.js";
 
 export async function getFolder(req, res, next) {
@@ -26,8 +27,14 @@ export async function getFolder(req, res, next) {
       });
     }
 
-    // Now get nested folders (since we confirmed ownership)
+    // Now get nested folders & files (since we confirmed ownership)
     const nestedFolders = await Folder.find({
+      userId: req.user._id,
+      parentFolderId: folderId,
+    }).lean();
+
+    // Now get nested folders (since we confirmed ownership)
+    const nestedFiles = await File.find({
       userId: req.user._id,
       parentFolderId: folderId,
     }).lean();
@@ -44,9 +51,25 @@ export async function getFolder(req, res, next) {
         };
       }
     );
-    return res
-      .status(200)
-      .json({ status: true, folders: formattedNestedFolders, files: [] });
+    const formattedNestedFiles = nestedFiles.map(
+      ({ _id, name, size, extension, userId, updatedAt, starred }) => {
+        // const owner = String(userId) === String(req.user._id) ? "me" : "other";
+        return {
+          id: _id,
+          name,
+          extension,
+          size,
+          owner: "me", // Since we filtered by userId, all will be "me"
+          starred,
+          lastModified: updatedAt,
+        };
+      }
+    );
+    return res.status(200).json({
+      status: true,
+      folders: formattedNestedFolders,
+      files: formattedNestedFiles,
+    });
   } catch (error) {
     next(error);
   }

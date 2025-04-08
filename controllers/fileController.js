@@ -51,19 +51,6 @@ export async function uploadFiles(req, res, next) {
     }));
 
     await File.insertMany(fileDocs, { ordered: false });
-    // const savedFiles = await Promise.all(
-    //   uploadedFiles.map((file, i) => {
-    //     return new File({
-    //       _id: req.generatedFileIds[i],
-    //       name: file.originalname.replace(/\.[^.\s]+$/, ""),
-    //       extension: path.extname(file.originalname),
-    //       mimetype: file.mimetype,
-    //       size: file.size,
-    //       parentFolderId,
-    //       userId: req.user._id,
-    //     }).save();
-    //   })
-    // );
 
     return res.status(201).json({
       status: true,
