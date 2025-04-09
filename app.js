@@ -48,7 +48,7 @@ app.use((req, res, next) => {
 // Routes
 app.use("/user", userRoutes);
 app.use("/folder", checkAuth, folderRoutes);
-app.use("/files", checkAuth, fileRouters);
+app.use("/file", checkAuth, fileRouters);
 
 // 404 Handler
 app.use((req, res) => {

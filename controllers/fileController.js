@@ -3,6 +3,7 @@ import path from "path";
 import Folder from "../models/folderModel.js";
 import File from "../models/fileModel.js";
 
+// ### SERVING FILE
 export async function serveFile(req, res, next) {
   try {
     const fileId = req.params.fileId;
@@ -56,6 +57,8 @@ export async function serveFile(req, res, next) {
     next(error);
   }
 }
+
+// ### UPLOADING FILES
 export async function uploadFiles(req, res, next) {
   try {
     const uploadedFiles = req.files;
@@ -109,6 +112,57 @@ export async function uploadFiles(req, res, next) {
       status: true,
       message: "Files uploaded successfully",
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ### RENAMING FILE
+export async function renameFile(req, res, next) {
+  try {
+    const newFileName = req.body.newName?.trim();
+    const fileId = req.params.fileId;
+
+    // validating file name
+    if (!newFileName) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Invalid File name" },
+      });
+    }
+    // validating folder name length
+    if (newFileName.length > 50) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "File name cannot exceed 50 characters" },
+      });
+    }
+    // checking validity of folder id
+    if (!mongoose.isValidObjectId(fileId)) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Invalid Folder ID" },
+      });
+    }
+
+    // checking user permission
+    const foundFileId = await File.findOne({
+      _id: fileId,
+      userId: req.user._id,
+    })
+      .select("_id")
+      .lean();
+
+    if (!foundFileId) {
+      clearAuthCookie(req, res, "token");
+      return res.status(403).json({
+        status: false,
+        errors: { message: "You don't have access to this File" },
+      });
+    }
+
+    await File.findByIdAndUpdate(foundFileId, { name: newFileName });
+    return res.status(200).json({ status: true, message: "File renamed" });
   } catch (error) {
     next(error);
   }
