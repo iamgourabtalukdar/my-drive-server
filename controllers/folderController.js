@@ -3,6 +3,7 @@ import Folder from "../models/folderModel.js";
 import File from "../models/fileModel.js";
 import { clearAuthCookie } from "../utils/clearAuthCookies.js";
 
+// ### SERVING FOLDER CONTENT
 export async function getFolder(req, res, next) {
   try {
     const folderId = req.params.folderId || req.user.rootFolderId;
@@ -75,13 +76,13 @@ export async function getFolder(req, res, next) {
   }
 }
 
+// ### CREATING NEW FOLDER
 export async function createFolder(req, res, next) {
   try {
     const folderName = req.body.name?.trim() || "New Folder";
 
     // validating folder name
     if (folderName.length > 30) {
-      console.log(folderName);
       return res.status(400).json({
         status: false,
         errors: { message: "Folder name cannot exceed 30 characters" },
@@ -110,6 +111,57 @@ export async function createFolder(req, res, next) {
     return res
       .status(201)
       .json({ status: true, message: "New Folder Created" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ### RENAMING FOLDER
+export async function renameFolder(req, res, next) {
+  try {
+    const newFolderName = req.body.newName?.trim();
+    const folderId = req.params.folderId;
+
+    // validating folder name
+    if (!newFolderName) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Invalid Folder name" },
+      });
+    }
+    // validating folder name length
+    if (newFolderName.length > 30) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Folder name cannot exceed 30 characters" },
+      });
+    }
+    // checking validity of folder id
+    if (!mongoose.isValidObjectId(folderId)) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Invalid Folder ID" },
+      });
+    }
+
+    // checking user permission
+    const foundFolderId = await Folder.findOne({
+      _id: folderId,
+      userId: req.user._id,
+    })
+      .select("_id")
+      .lean();
+
+    if (!foundFolderId) {
+      clearAuthCookie(req, res, "token");
+      return res.status(403).json({
+        status: false,
+        errors: { message: "You don't have access to this folder" },
+      });
+    }
+
+    await Folder.findByIdAndUpdate(foundFolderId, { name: newFolderName });
+    return res.status(200).json({ status: true, message: "Folder renamed" });
   } catch (error) {
     next(error);
   }

@@ -21,7 +21,7 @@ const app = express();
 app.use(
   cors({
     origin: "http://localhost:5175",
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Parent-Folder-Id", "File-Count"],
     credentials: true,
   })

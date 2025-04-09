@@ -1,10 +1,13 @@
 import { Router } from "express";
-import { createFolder, getFolder } from "../controllers/folderController.js";
+import {
+  createFolder,
+  getFolder,
+  renameFolder,
+} from "../controllers/folderController.js";
 
 const router = Router();
 
-router.get("/", getFolder);
-router.get("/:folderId", getFolder);
-router.post("/", createFolder);
+router.route("/").get(getFolder).post(createFolder);
+router.route("/:folderId").get(getFolder).patch(renameFolder);
 
 export default router;
