@@ -2,6 +2,7 @@ import { Router } from "express";
 import path from "path";
 import multer from "multer";
 import {
+  moveFileToTrash,
   renameFile,
   serveFile,
   uploadFiles,
@@ -38,6 +39,7 @@ const upload = multer({
 const router = Router();
 // Route
 router.route("/:fileId").get(serveFile).patch(renameFile);
+router.route("/:fileId/trash").patch(moveFileToTrash);
 router.post("/upload", generateFileIds, upload.array("files"), uploadFiles);
 
 export default router;

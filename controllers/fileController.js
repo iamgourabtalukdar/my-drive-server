@@ -167,3 +167,41 @@ export async function renameFile(req, res, next) {
     next(error);
   }
 }
+
+// ### MOVE FILE TO TRASH
+export async function moveFileToTrash(req, res, next) {
+  try {
+    const fileId = req.params.fileId;
+
+    // checking validity of folder id
+    if (!mongoose.isValidObjectId(fileId)) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Invalid Folder ID" },
+      });
+    }
+
+    // checking user permission
+    const foundFileId = await File.findOne({
+      _id: fileId,
+      userId: req.user._id,
+    })
+      .select("_id")
+      .lean();
+
+    if (!foundFileId) {
+      clearAuthCookie(req, res, "token");
+      return res.status(403).json({
+        status: false,
+        errors: { message: "You don't have access to this File" },
+      });
+    }
+
+    await File.findByIdAndUpdate(foundFileId, { isTrashed: true });
+    return res
+      .status(200)
+      .json({ status: true, message: "File is moved to trash" });
+  } catch (error) {
+    next(error);
+  }
+}

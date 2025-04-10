@@ -38,6 +38,7 @@ export async function getFolder(req, res, next) {
     const nestedFiles = await File.find({
       userId: req.user._id,
       parentFolderId: folderId,
+      isTrashed: false,
     }).lean();
 
     const formattedNestedFolders = nestedFolders.map(
