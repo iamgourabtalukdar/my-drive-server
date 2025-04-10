@@ -22,6 +22,10 @@ const folderSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    isTrashed: {
+      type: Boolean,
+      default: false,
+    },
   },
   { strict: "throw", timestamps: true }
 );

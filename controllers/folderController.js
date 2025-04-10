@@ -79,7 +79,7 @@ export async function getFolder(req, res, next) {
 // ### CREATING NEW FOLDER
 export async function createFolder(req, res, next) {
   try {
-    const folderName = req.body.name?.trim() || "New Folder";
+    const folderName = req.body?.name?.trim() || "New Folder";
 
     // validating folder name
     if (folderName.length > 30) {
@@ -119,7 +119,7 @@ export async function createFolder(req, res, next) {
 // ### RENAMING FOLDER
 export async function renameFolder(req, res, next) {
   try {
-    const newFolderName = req.body.newName?.trim();
+    const newFolderName = req.body?.newName?.trim();
     const folderId = req.params.folderId;
 
     // validating folder name

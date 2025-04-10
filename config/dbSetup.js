@@ -81,6 +81,9 @@ try {
           starred: {
             bsonType: "bool",
           },
+          isTrashed: {
+            bsonType: "bool",
+          },
           createdAt: {
             bsonType: "date",
           },
@@ -132,6 +135,9 @@ try {
             bsonType: "objectId",
           },
           starred: {
+            bsonType: "bool",
+          },
+          isTrashed: {
             bsonType: "bool",
           },
           createdAt: {

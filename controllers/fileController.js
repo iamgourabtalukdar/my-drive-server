@@ -120,7 +120,7 @@ export async function uploadFiles(req, res, next) {
 // ### RENAMING FILE
 export async function renameFile(req, res, next) {
   try {
-    const newFileName = req.body.newName?.trim();
+    const newFileName = req.body?.newName?.trim();
     const fileId = req.params.fileId;
 
     // validating file name
