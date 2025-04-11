@@ -19,7 +19,9 @@ export async function getFolder(req, res, next) {
     const folder = await Folder.findOne({
       _id: folderId,
       userId: req.user._id,
-    });
+    })
+      .select("_id isTrashed")
+      .lean();
 
     if (!folder) {
       clearAuthCookie(req, res, "token");
@@ -29,6 +31,11 @@ export async function getFolder(req, res, next) {
       });
     }
 
+    if (folder.isTrashed) {
+      return res
+        .status(400)
+        .json({ status: false, errors: { message: "Folder is in trashed" } });
+    }
     // Now get nested folders & files (since we confirmed ownership)
     const nestedFolders = await Folder.find({
       userId: req.user._id,
@@ -82,9 +89,15 @@ export async function getFolder(req, res, next) {
 // ### CREATING NEW FOLDER
 export async function createFolder(req, res, next) {
   try {
-    const folderName = req.body?.name?.trim() || "New Folder";
+    const folderName = req.body?.name?.trim();
 
     // validating folder name
+    if (!folderName) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Folder name can't be empty" },
+      });
+    }
     if (folderName.length > 30) {
       return res.status(400).json({
         status: false,

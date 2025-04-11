@@ -200,7 +200,7 @@ export async function moveFileToTrash(req, res, next) {
     if (foundFile.isTrashed) {
       return res.status(400).json({
         status: false,
-        errors: { message: "Folder is already Trashed" },
+        errors: { message: "File is already Trashed" },
       });
     }
 
