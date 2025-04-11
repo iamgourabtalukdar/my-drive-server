@@ -182,14 +182,14 @@ export async function moveFileToTrash(req, res, next) {
     }
 
     // checking user permission
-    const foundFileId = await File.findOne({
+    const foundFile = await File.findOne({
       _id: fileId,
       userId: req.user._id,
     })
-      .select("_id")
+      .select("_id isTrashed")
       .lean();
 
-    if (!foundFileId) {
+    if (!foundFile) {
       clearAuthCookie(req, res, "token");
       return res.status(403).json({
         status: false,
@@ -197,7 +197,14 @@ export async function moveFileToTrash(req, res, next) {
       });
     }
 
-    await File.findByIdAndUpdate(foundFileId, { isTrashed: true });
+    if (foundFile.isTrashed) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Folder is already Trashed" },
+      });
+    }
+
+    await File.findByIdAndUpdate(foundFile._id, { isTrashed: true });
     return res
       .status(200)
       .json({ status: true, message: "File is moved to trash" });
