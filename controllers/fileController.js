@@ -298,8 +298,14 @@ export async function deleteFile(req, res, next) {
       `${foundFile._id}${foundFile.extension}`
     );
 
-    await File.findByIdAndDelete(foundFile._id);
+    // await unlink(fullFilePath).catch((e) =>
+    //   console.error(`Failed to delete file ${foundFile._id}`, e)
+    // );
+
+    // No need to use .catch() as this is the single file deletion process. if any error occurs it will be handled over global error middleware [message: Internal server error]
     await unlink(fullFilePath);
+
+    await File.findByIdAndDelete(foundFile._id);
 
     return res.status(200).json({ status: true, message: "File is deleted" });
   } catch (error) {
