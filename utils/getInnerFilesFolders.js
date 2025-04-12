@@ -18,7 +18,7 @@ export async function getInnerFilesFolders(folderId = null) {
   let innerFilesArr = await File.find({
     parentFolderId: folderId,
   })
-    .select("_id")
+    .select("_id extension")
     .lean();
 
   for (const innerFolder of innerFoldersArr) {

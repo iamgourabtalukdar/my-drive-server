@@ -1,8 +1,10 @@
 import mongoose from "mongoose";
+import { unlink } from "fs/promises";
 import Folder from "../models/folderModel.js";
 import File from "../models/fileModel.js";
 import { clearAuthCookie } from "../utils/clearAuthCookies.js";
 import { getInnerFilesFolders } from "../utils/getInnerFilesFolders.js";
+import path from "path";
 
 // ### SERVING FOLDER CONTENT
 export async function getFolder(req, res, next) {
@@ -321,6 +323,100 @@ export async function restoreFolderFromTrash(req, res, next) {
       return res
         .status(200)
         .json({ status: true, message: "Folder is restored from trash" });
+    } catch (error) {
+      await session.abortTransaction();
+      next(error);
+    } finally {
+      await session.endSession();
+    }
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ### DELETE FOLDER FROM TRASH
+export async function deleteFolder(req, res, next) {
+  try {
+    const folderId = req.params.folderId;
+
+    // checking validity of folder id
+    if (!mongoose.isValidObjectId(folderId)) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Invalid Folder ID" },
+      });
+    }
+
+    // checking user permission
+    const foundFolder = await Folder.findOne({
+      _id: folderId,
+      userId: req.user._id,
+    })
+      .select("_id isTrashed")
+      .lean();
+
+    if (!foundFolder) {
+      clearAuthCookie(req, res, "token");
+      return res.status(403).json({
+        status: false,
+        errors: { message: "You don't have access to this folder" },
+      });
+    }
+
+    //checking if folder not in trash
+    if (!foundFolder.isTrashed) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Folder is not in Trash" },
+      });
+    }
+
+    // finding nested files & folders (to N-th level deep)
+    const { files, folders } = await getInnerFilesFolders(folderId);
+
+    //adding current folder
+    folders.push({ _id: foundFolder._id });
+
+    // starting transactions
+    const session = await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      // files.forEach(async (file) => {
+      //   const fullPath = path.resolve(
+      //     req.STORAGE_BASE_DIR,
+      //     file._id + file.extension
+      //   );
+      //   await unlink(fullPath);
+      // });
+
+      await Promise.all(
+        files.map(async (file) => {
+          const fullPath = path.resolve(
+            req.STORAGE_BASE_DIR,
+            file._id + file.extension
+          );
+          return unlink(fullPath).catch((e) =>
+            console.error(`Failed to delete file ${file._id}`, e)
+          );
+        })
+      );
+
+      await Folder.deleteMany(
+        { _id: { $in: folders.map((folder) => folder._id) } },
+        { session }
+      );
+      await File.deleteMany(
+        { _id: { $in: files.map((file) => file._id) } },
+        { session }
+      );
+
+      await session.commitTransaction();
+
+      return res
+        .status(200)
+        .json({ status: true, message: "Folder is Deleted Permanently" });
     } catch (error) {
       await session.abortTransaction();
       next(error);
