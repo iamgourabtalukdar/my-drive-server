@@ -255,3 +255,79 @@ export async function moveFolderToTrash(req, res, next) {
     next(error);
   }
 }
+
+// ### RESTORE FOLDER FROM TRASH
+export async function restoreFolderFromTrash(req, res, next) {
+  try {
+    const folderId = req.params.folderId;
+
+    // checking validity of folder id
+    if (!mongoose.isValidObjectId(folderId)) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Invalid Folder ID" },
+      });
+    }
+
+    // checking user permission
+    const foundFolder = await Folder.findOne({
+      _id: folderId,
+      userId: req.user._id,
+    })
+      .select("_id isTrashed")
+      .lean();
+
+    if (!foundFolder) {
+      clearAuthCookie(req, res, "token");
+      return res.status(403).json({
+        status: false,
+        errors: { message: "You don't have access to this folder" },
+      });
+    }
+
+    //checking if folder not in trash
+    if (!foundFolder.isTrashed) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Folder is not in Trash" },
+      });
+    }
+
+    // finding nested files & folders (to N-th level deep)
+    const { files, folders } = await getInnerFilesFolders(folderId);
+
+    //adding current folder
+    folders.push({ _id: foundFolder._id });
+
+    // starting transactions
+    const session = await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      await Folder.updateMany(
+        { _id: { $in: folders.map((folder) => folder._id) } },
+        { isTrashed: false },
+        { session }
+      );
+      await File.updateMany(
+        { _id: { $in: files.map((file) => file._id) } },
+        { isTrashed: false },
+        { session }
+      );
+
+      await session.commitTransaction();
+
+      return res
+        .status(200)
+        .json({ status: true, message: "Folder is restored from trash" });
+    } catch (error) {
+      await session.abortTransaction();
+      next(error);
+    } finally {
+      await session.endSession();
+    }
+  } catch (error) {
+    next(error);
+  }
+}

@@ -6,6 +6,7 @@ import {
   renameFile,
   serveFile,
   uploadFiles,
+  restoreFileFromTrash,
 } from "../controllers/fileController.js";
 import { generateFileIds } from "../middlewares/generateFileIDs.js";
 
@@ -40,6 +41,7 @@ const router = Router();
 // Route
 router.route("/:fileId").get(serveFile).patch(renameFile);
 router.route("/:fileId/trash").patch(moveFileToTrash);
+router.route("/:fileId/restore").patch(restoreFileFromTrash);
 router.post("/upload", generateFileIds, upload.array("files"), uploadFiles);
 
 export default router;

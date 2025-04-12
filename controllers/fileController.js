@@ -212,3 +212,47 @@ export async function moveFileToTrash(req, res, next) {
     next(error);
   }
 }
+// ### RESTORE FILE FROM TRASH
+export async function restoreFileFromTrash(req, res, next) {
+  try {
+    const fileId = req.params.fileId;
+
+    // checking validity of folder id
+    if (!mongoose.isValidObjectId(fileId)) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Invalid Folder ID" },
+      });
+    }
+
+    // checking user permission
+    const foundFile = await File.findOne({
+      _id: fileId,
+      userId: req.user._id,
+    })
+      .select("_id isTrashed")
+      .lean();
+
+    if (!foundFile) {
+      clearAuthCookie(req, res, "token");
+      return res.status(403).json({
+        status: false,
+        errors: { message: "You don't have access to this File" },
+      });
+    }
+
+    if (!foundFile.isTrashed) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "File is not in Trash" },
+      });
+    }
+
+    await File.findByIdAndUpdate(foundFile._id, { isTrashed: false });
+    return res
+      .status(200)
+      .json({ status: true, message: "File is restored from trash" });
+  } catch (error) {
+    next(error);
+  }
+}

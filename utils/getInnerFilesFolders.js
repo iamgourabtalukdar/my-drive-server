@@ -11,14 +11,12 @@ export async function getInnerFilesFolders(folderId = null) {
 
   let innerFoldersArr = await Folder.find({
     parentFolderId: folderId,
-    isTrashed: false,
   })
     .select("_id")
     .lean();
 
   let innerFilesArr = await File.find({
     parentFolderId: folderId,
-    isTrashed: false,
   })
     .select("_id")
     .lean();
