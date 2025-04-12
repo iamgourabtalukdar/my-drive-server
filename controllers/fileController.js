@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import path from "path";
 import Folder from "../models/folderModel.js";
 import File from "../models/fileModel.js";
+import { unlink } from "fs/promises";
 
 // ### SERVING FILE
 export async function serveFile(req, res, next) {
@@ -252,6 +253,55 @@ export async function restoreFileFromTrash(req, res, next) {
     return res
       .status(200)
       .json({ status: true, message: "File is restored from trash" });
+  } catch (error) {
+    next(error);
+  }
+}
+// ### RESTORE FILE FROM TRASH
+export async function deleteFile(req, res, next) {
+  try {
+    const fileId = req.params.fileId;
+
+    // checking validity of folder id
+    if (!mongoose.isValidObjectId(fileId)) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Invalid Folder ID" },
+      });
+    }
+
+    // checking user permission
+    const foundFile = await File.findOne({
+      _id: fileId,
+      userId: req.user._id,
+    })
+      .select("_id extension isTrashed")
+      .lean();
+
+    if (!foundFile) {
+      clearAuthCookie(req, res, "token");
+      return res.status(403).json({
+        status: false,
+        errors: { message: "You don't have access to this File" },
+      });
+    }
+
+    if (!foundFile.isTrashed) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "File is not in Trash" },
+      });
+    }
+
+    const fullFilePath = path.resolve(
+      req.STORAGE_BASE_DIR,
+      `${foundFile._id}${foundFile.extension}`
+    );
+
+    await File.findByIdAndDelete(foundFile._id);
+    await unlink(fullFilePath);
+
+    return res.status(200).json({ status: true, message: "File is deleted" });
   } catch (error) {
     next(error);
   }
