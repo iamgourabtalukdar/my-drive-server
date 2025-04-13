@@ -213,6 +213,7 @@ export async function moveFileToTrash(req, res, next) {
     next(error);
   }
 }
+
 // ### RESTORE FILE FROM TRASH
 export async function restoreFileFromTrash(req, res, next) {
   try {
@@ -257,7 +258,8 @@ export async function restoreFileFromTrash(req, res, next) {
     next(error);
   }
 }
-// ### RESTORE FILE FROM TRASH
+
+// ### DELETE FILE FROM TRASH
 export async function deleteFile(req, res, next) {
   try {
     const fileId = req.params.fileId;
@@ -308,6 +310,63 @@ export async function deleteFile(req, res, next) {
     await File.findByIdAndDelete(foundFile._id);
 
     return res.status(200).json({ status: true, message: "File is deleted" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ### SERVING RECENT FILES
+export async function recentFile(req, res, next) {
+  try {
+    const foundFiles = await File.find({
+      userId: req.user._id,
+      isTrashed: false,
+    })
+      .select("name size extension userId starred updatedAt")
+      .lean();
+
+    // const formattedFiles = foundFiles.map(
+    //   ({ _id, name, size, extension, userId, updatedAt, starred }) => {
+    //     // const owner = String(userId) === String(req.user._id) ? "me" : "other";
+    //     return {
+    //       id: _id,
+    //       name,
+    //       extension,
+    //       size,
+    //       owner: "me", // Since we filtered by userId, all will be "me"
+    //       starred,
+    //       lastModified: updatedAt,
+    //     };
+    //   }
+    // );
+
+    const formattedFiles = {};
+    foundFiles.forEach(
+      ({ _id, name, size, extension, userId, updatedAt, starred }) => {
+        // const owner = String(userId) === String(req.user._id) ? "me" : "other";
+        const obj = {
+          id: _id,
+          name,
+          extension,
+          size,
+          owner: "me", // Since we filtered by userId, all will be "me"
+          starred,
+          lastModified: updatedAt,
+        };
+
+        const currentDate = updatedAt.toISOString().split("T")[0];
+
+        if (Boolean(formattedFiles[currentDate])) {
+          formattedFiles[currentDate].push(obj);
+        } else {
+          formattedFiles[currentDate] = [obj];
+        }
+      }
+    );
+    return res.status(200).json({
+      status: true,
+      files: formattedFiles,
+    });
   } catch (error) {
     next(error);
   }

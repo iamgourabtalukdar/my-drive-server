@@ -8,6 +8,7 @@ import {
   uploadFiles,
   restoreFileFromTrash,
   deleteFile,
+  recentFile,
 } from "../controllers/fileController.js";
 import { generateFileIds } from "../middlewares/generateFileIDs.js";
 
@@ -40,9 +41,10 @@ const upload = multer({
 
 const router = Router();
 // Route
+router.route("/recent").get(recentFile);
+router.post("/upload", generateFileIds, upload.array("files"), uploadFiles);
 router.route("/:fileId").get(serveFile).patch(renameFile);
 router.route("/:fileId/trash").patch(moveFileToTrash).delete(deleteFile);
 router.route("/:fileId/restore").patch(restoreFileFromTrash);
-router.post("/upload", generateFileIds, upload.array("files"), uploadFiles);
 
 export default router;
