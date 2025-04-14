@@ -56,7 +56,7 @@ app.use("/trash", checkAuth, trashRoutes);
 app.use((req, res) => {
   res.status(404).json({
     status: false,
-    message: "Route not found",
+    errors: { message: "Route not found" },
   });
 });
 

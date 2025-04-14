@@ -110,7 +110,9 @@ export async function signup(req, res, next) {
       );
 
       await session.commitTransaction();
-      return res.status(201).json({ status: true, message: "User created" });
+      return res
+        .status(201)
+        .json({ status: true, message: "New User Created" });
     } catch (error) {
       console.log(error);
       await session.abortTransaction();
