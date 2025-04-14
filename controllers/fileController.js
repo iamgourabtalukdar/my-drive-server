@@ -325,21 +325,6 @@ export async function recentFile(req, res, next) {
       .select("name size extension userId starred updatedAt")
       .lean();
 
-    // const formattedFiles = foundFiles.map(
-    //   ({ _id, name, size, extension, userId, updatedAt, starred }) => {
-    //     // const owner = String(userId) === String(req.user._id) ? "me" : "other";
-    //     return {
-    //       id: _id,
-    //       name,
-    //       extension,
-    //       size,
-    //       owner: "me", // Since we filtered by userId, all will be "me"
-    //       starred,
-    //       lastModified: updatedAt,
-    //     };
-    //   }
-    // );
-
     const formattedFiles = {};
     foundFiles.forEach(
       ({ _id, name, size, extension, userId, updatedAt, starred }) => {
@@ -363,9 +348,18 @@ export async function recentFile(req, res, next) {
         }
       }
     );
+
+    // Sort the dates in descending order (newest first)
+    const sortedFiles = {};
+    Object.keys(formattedFiles)
+      .sort((a, b) => new Date(b) - new Date(a)) // Sort dates in descending order
+      .forEach((date) => {
+        sortedFiles[date] = formattedFiles[date];
+      });
+
     return res.status(200).json({
       status: true,
-      files: formattedFiles,
+      files: sortedFiles,
     });
   } catch (error) {
     next(error);
