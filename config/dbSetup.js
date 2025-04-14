@@ -28,7 +28,7 @@ try {
           email: {
             bsonType: "string",
             description: "please enter a valid email",
-            pattern: "^[^s@]+@[^s@]+.[^s@]+$",
+            pattern: "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
           },
           password: {
             bsonType: "string",
