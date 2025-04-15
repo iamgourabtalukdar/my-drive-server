@@ -6,6 +6,7 @@ import userRoutes from "./routes/userRoutes.js";
 import folderRoutes from "./routes/folderRoutes.js";
 import fileRouters from "./routes/fileRoutes.js";
 import trashRoutes from "./routes/trashRoutes.js";
+import starredRoutes from "./routes/starredRoutes.js";
 import connectToDB from "./config/db.js";
 import { checkAuth } from "./middlewares/auth.js";
 import { fileURLToPath } from "url";
@@ -51,6 +52,7 @@ app.use("/user", userRoutes);
 app.use("/folder", checkAuth, folderRoutes);
 app.use("/file", checkAuth, fileRouters);
 app.use("/trash", checkAuth, trashRoutes);
+app.use("/starred", checkAuth, starredRoutes);
 
 // 404 Handler
 app.use((req, res) => {
