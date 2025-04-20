@@ -1,10 +1,8 @@
 import mongoose from "mongoose";
-import { unlink } from "fs/promises";
 import Folder from "../models/folderModel.js";
 import File from "../models/fileModel.js";
 import { clearAuthCookie } from "../utils/clearAuthCookies.js";
 import { getInnerFilesFolders } from "../utils/getInnerFilesFolders.js";
-import path from "path";
 
 // ### SERVING FOLDER CONTENT
 export async function getFolder(req, res, next) {

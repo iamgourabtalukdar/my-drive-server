@@ -9,7 +9,9 @@ export async function checkAuth(req, res, next) {
     clearAuthCookie(req, res, "token");
     return res.status(401).json({
       status: false,
-      message: "Unauthorized: No token found or token modified",
+      errors: {
+        message: "Unauthorized: No token found or token modified",
+      },
     });
   }
 
@@ -27,7 +29,9 @@ export async function checkAuth(req, res, next) {
       clearAuthCookie(req, res, "token");
       return res.status(401).json({
         status: false,
-        message: "Unauthorized: Token expired",
+        errors: {
+          message: "Unauthorized: Token expired",
+        },
       });
     }
 
@@ -36,7 +40,9 @@ export async function checkAuth(req, res, next) {
       clearAuthCookie(req, res, "token");
       return res.status(400).json({
         status: false,
-        message: "No user found",
+        errors: {
+          message: "No user found",
+        },
       });
     }
     // Attach user  to request for downstream middleware
@@ -47,7 +53,9 @@ export async function checkAuth(req, res, next) {
     clearAuthCookie(req, res, "token");
     return res.status(401).json({
       status: false,
-      message: "Unauthorized: Invalid token",
+      errors: {
+        message: "Unauthorized: Invalid token",
+      },
     });
   }
 }

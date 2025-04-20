@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 import path from "path";
 import Folder from "../models/folderModel.js";
 import File from "../models/fileModel.js";
-import { unlink } from "fs/promises";
 
 // ### SERVING FILE
 export async function serveFile(req, res, next) {

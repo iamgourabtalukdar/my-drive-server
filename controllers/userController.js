@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import bcrypt from "bcrypt";
 import User from "../models/userModel.js";
 import Folder from "../models/folderModel.js";
 
@@ -57,6 +58,8 @@ function validateInput(inputData) {
     errors,
   };
 }
+
+// SIGN UP (NEW ACCOUNT CREATION)
 export async function signup(req, res, next) {
   const { name, email, password } = req.body || {};
 
@@ -69,7 +72,7 @@ export async function signup(req, res, next) {
         .json({ status: false, errors: userInputValidity.errors });
     }
 
-    const user = await User.findOne({ email }).lean();
+    const user = await User.findOne({ email }).select("_id").lean();
 
     if (user) {
       return res
@@ -83,13 +86,15 @@ export async function signup(req, res, next) {
     try {
       const userId = new mongoose.Types.ObjectId();
       const rootFolderId = new mongoose.Types.ObjectId();
+
+      const hashedPassword = await bcrypt.hash(password, 12);
       await User.create(
         [
           {
             _id: userId,
             name,
             email,
-            password,
+            password: hashedPassword,
             rootFolderId,
           },
         ],
@@ -140,9 +145,18 @@ export async function signin(req, res, next) {
         .json({ status: false, errors: userInputValidity.errors });
     }
 
-    const user = await User.findOne({ email, password }).lean();
+    const user = await User.findOne({ email }).select("_id password").lean();
 
     if (!user) {
+      return res.status(401).json({
+        status: false,
+        errors: { message: "Email doesn't exists! Please Signup" },
+      });
+    }
+
+    const isValidPassword = await bcrypt.compare(password, user.password);
+
+    if (!isValidPassword) {
       return res
         .status(401)
         .json({ status: false, errors: { message: "Invalid Credentials" } });
