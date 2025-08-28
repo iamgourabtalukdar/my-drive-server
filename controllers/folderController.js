@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 import Folder from "../models/folderModel.js";
 import File from "../models/fileModel.js";
 import { clearAuthCookie } from "../utils/clearAuthCookies.js";
-import { getInnerFilesFolders } from "../utils/getInnerFilesFolders.js";
 
 // ### SERVING FOLDER CONTENT
 export async function getFolder(req, res, next) {
@@ -15,71 +14,68 @@ export async function getFolder(req, res, next) {
         .json({ status: false, errors: { message: "Invalid Folder Id" } });
     }
 
-    // First check if the folder exists and belongs to the user
+    // 1. First, check if the folder exists, is owned by the user, and is not trashed.
     const folder = await Folder.findOne({
       _id: folderId,
       userId: req.user._id,
+      isTrashed: false,
     })
-      .select("_id isTrashed")
+      .select("_id")
       .lean();
 
     if (!folder) {
+      // This will catch: non-existent folders, folders not owned by the user, or trashed folders.
       clearAuthCookie(req, res, "token");
       return res.status(403).json({
         status: false,
-        errors: { message: "You don't have access to this folder" },
+        errors: { message: "You don't have access to this resource" },
       });
     }
 
-    if (folder.isTrashed) {
-      return res
-        .status(400)
-        .json({ status: false, errors: { message: "Folder is in trashed" } });
-    }
-    // Now get nested folders & files (since we confirmed ownership)
-    const nestedFolders = await Folder.find({
-      userId: req.user._id,
-      parentFolderId: folderId,
-      isTrashed: false,
-    }).lean();
+    // 2. Fetch nested folders and files in parallel since they don't depend on each other.
+    const [nestedFolders, nestedFiles] = await Promise.all([
+      Folder.find({
+        userId: req.user._id,
+        parentFolderId: folderId,
+        isTrashed: false,
+      })
+        .select("name starred updatedAt")
+        .lean(),
+      File.find({
+        userId: req.user._id,
+        parentFolderId: folderId,
+        isTrashed: false,
+      })
+        .select("name extension size starred updatedAt")
+        .lean(),
+    ]);
 
-    // Now get nested folders (since we confirmed ownership)
-    const nestedFiles = await File.find({
-      userId: req.user._id,
-      parentFolderId: folderId,
-      isTrashed: false,
-    }).lean();
-
+    // 3. Format the results for the client. This logic remains the same.
     const formattedNestedFolders = nestedFolders.map(
-      ({ _id, name, userId, updatedAt, starred }) => {
-        // const owner = String(userId) === String(req.user._id) ? "me" : "other";
-        return {
-          id: _id,
-          name,
-          owner: "me", // Since we filtered by userId, all will be "me"
-          starred,
-          lastModified: updatedAt,
-        };
-      }
+      ({ _id, name, starred, updatedAt }) => ({
+        id: _id,
+        name,
+        owner: "me",
+        starred,
+        lastModified: updatedAt,
+      })
     );
+
     const formattedNestedFiles = nestedFiles.map(
-      ({ _id, name, size, extension, userId, updatedAt, starred }) => {
-        // const owner = String(userId) === String(req.user._id) ? "me" : "other";
-        return {
-          id: _id,
-          name,
-          extension,
-          size,
-          owner: "me", // Since we filtered by userId, all will be "me"
-          starred,
-          lastModified: updatedAt,
-        };
-      }
+      ({ _id, name, extension, size, starred, updatedAt }) => ({
+        id: _id,
+        name,
+        extension,
+        size,
+        owner: "me",
+        starred,
+        lastModified: updatedAt,
+      })
     );
+
     return res.status(200).json({
       status: true,
-      folders: formattedNestedFolders,
-      files: formattedNestedFiles,
+      data: { folders: formattedNestedFolders, files: formattedNestedFiles },
     });
   } catch (error) {
     next(error);
@@ -89,44 +85,61 @@ export async function getFolder(req, res, next) {
 // ### CREATING NEW FOLDER
 export async function createFolder(req, res, next) {
   try {
-    const folderName = req.body?.name?.trim();
+    const { name, parentFolderId: reqParentFolderId } = req.body;
+    const folderName = name?.trim();
 
-    // validating folder name
-    if (!folderName) {
+    console.log(reqParentFolderId);
+    console.log(req.user.rootFolderId);
+    const parentFolderId = reqParentFolderId || req.user.rootFolderId;
+    console.log(parentFolderId);
+
+    // 1. Consolidated validation
+    if (!folderName || folderName.length > 30) {
       return res.status(400).json({
         status: false,
-        errors: { message: "Folder name can't be empty" },
-      });
-    }
-    if (folderName.length > 30) {
-      return res.status(400).json({
-        status: false,
-        errors: { message: "Folder name cannot exceed 30 characters" },
+        errors: { message: "Folder name must be between 1 and 30 characters." },
       });
     }
 
-    // creating parent folder id
-    const parentFolderId =
-      req.headers["parent-folder-id"] || req.user.rootFolderId;
-
-    // checking parent  folder id
     if (!mongoose.isValidObjectId(parentFolderId)) {
       return res.status(400).json({
         status: false,
-        errors: { message: "Invalid parent folder id" },
+        errors: { message: "Invalid parent folder ID." },
       });
     }
 
-    const id = new mongoose.Types.ObjectId();
-    await Folder.insertOne({
-      _id: id,
+    // 2. CRUCIAL: Verify the user owns the parent folder
+    const parentFolder = await Folder.findOne({
+      _id: parentFolderId,
+      userId: req.user._id,
+    })
+      .select("_id")
+      .lean();
+
+    if (!parentFolder) {
+      return res.status(403).json({
+        status: false,
+        errors: { message: "You don't have access to the parent folder." },
+      });
+    }
+
+    console.log({
       name: folderName,
       userId: req.user._id,
       parentFolderId,
     });
-    return res
-      .status(201)
-      .json({ status: true, message: "New Folder Created" });
+    // 3. Use idiomatic `Folder.create()` to create the new folder
+    const newFolder = await Folder.create({
+      name: folderName,
+      userId: req.user._id,
+      parentFolderId,
+    });
+
+    return res.status(201).json({
+      status: true,
+      message: "New folder created successfully.",
+      data: { id: newFolder._id },
+    });
   } catch (error) {
     next(error);
   }
@@ -135,24 +148,18 @@ export async function createFolder(req, res, next) {
 // ### RENAMING FOLDER
 export async function renameFolder(req, res, next) {
   try {
-    const newFolderName = req.body?.newName?.trim();
-    const folderId = req.params.folderId;
+    const { name } = req.body;
+    const { folderId } = req.params;
 
-    // validating folder name
-    if (!newFolderName) {
+    // 1. Combine all input validations at the top.
+    const trimmedName = name?.trim();
+    if (!trimmedName || trimmedName.length > 30) {
       return res.status(400).json({
         status: false,
-        errors: { message: "Invalid Folder name" },
+        errors: { message: "Folder name must be between 1 and 30 characters." },
       });
     }
-    // validating folder name length
-    if (newFolderName.length > 30) {
-      return res.status(400).json({
-        status: false,
-        errors: { message: "Folder name cannot exceed 30 characters" },
-      });
-    }
-    // checking validity of folder id
+
     if (!mongoose.isValidObjectId(folderId)) {
       return res.status(400).json({
         status: false,
@@ -160,24 +167,34 @@ export async function renameFolder(req, res, next) {
       });
     }
 
-    // checking user permission
-    const foundFolderId = await Folder.findOne({
-      _id: folderId,
-      userId: req.user._id,
-    })
-      .select("_id")
-      .lean();
+    // 2. Perform the authorization check AND the update in a single atomic operation.
+    const updatedFolder = await Folder.findOneAndUpdate(
+      {
+        _id: folderId,
+        userId: req.user._id,
+      },
+      {
+        $set: { name: trimmedName },
+      },
+      {
+        new: false,
+      }
+    );
 
-    if (!foundFolderId) {
+    // 3. If nothing was updated, it means the user didn't have permission or the folder didn't exist.
+    if (!updatedFolder) {
       clearAuthCookie(req, res, "token");
       return res.status(403).json({
         status: false,
-        errors: { message: "You don't have access to this folder" },
+        errors: {
+          message: "You don't have access to this folder or it does not exist.",
+        },
       });
     }
 
-    await Folder.findByIdAndUpdate(foundFolderId, { name: newFolderName });
-    return res.status(200).json({ status: true, message: "Folder renamed" });
+    return res
+      .status(200)
+      .json({ status: true, message: "Folder renamed successfully." });
   } catch (error) {
     next(error);
   }
@@ -185,73 +202,106 @@ export async function renameFolder(req, res, next) {
 
 // ### MOVE FOLDER TO TRASH
 export async function moveFolderToTrash(req, res, next) {
+  const { folderId } = req.params;
+
+  // 1. A single session for all operations
+  const session = await mongoose.startSession();
+
   try {
-    const folderId = req.params.folderId;
-
-    // checking validity of folder id
     if (!mongoose.isValidObjectId(folderId)) {
-      return res.status(400).json({
-        status: false,
-        errors: { message: "Invalid Folder ID" },
-      });
-    }
-
-    // checking user permission
-    const foundFolder = await Folder.findOne({
-      _id: folderId,
-      userId: req.user._id,
-    })
-      .select("_id isTrashed")
-      .lean();
-
-    if (!foundFolder) {
-      clearAuthCookie(req, res, "token");
-      return res.status(403).json({
-        status: false,
-        errors: { message: "You don't have access to this folder" },
-      });
-    }
-
-    //checking is folder  already trashed
-    if (foundFolder.isTrashed) {
-      return res.status(400).json({
-        status: false,
-        errors: { message: "Folder is already Trashed" },
-      });
-    }
-
-    // finding nested files & folders (to N-th level deep)
-    const { files, folders } = await getInnerFilesFolders(folderId);
-
-    //adding current folder
-    folders.push({ _id: foundFolder._id });
-    // starting transactions
-    const session = await mongoose.startSession();
-
-    try {
-      session.startTransaction();
-
-      await Folder.updateMany(
-        { _id: { $in: folders.map((folder) => folder._id) } },
-        { isTrashed: true }
-      );
-      await File.updateMany(
-        { _id: { $in: files.map((file) => file._id) } },
-        { isTrashed: true }
-      );
-
-      await session.commitTransaction();
-
       return res
-        .status(200)
-        .json({ status: true, message: "Folder is moved to trashed" });
-    } catch (error) {
-      await session.abortTransaction();
-      next(error);
-    } finally {
-      await session.endSession();
+        .status(400)
+        .json({ status: false, errors: { message: "Invalid Folder ID" } });
     }
+
+    let allFolderIds = [];
+    let allFileIds = [];
+
+    // Start the transaction
+    await session.withTransaction(async () => {
+      // 2. Use an aggregation to find all descendant folders in ONE database call
+      const aggregationResult = await Folder.aggregate([
+        // Stage 1: Match the top-level folder, ensuring ownership and that it's not already trashed.
+        {
+          $match: {
+            _id: new mongoose.Types.ObjectId(folderId),
+            userId: req.user._id,
+            isTrashed: false,
+          },
+        },
+        // Stage 2: Traverse the folder hierarchy to find all nested folders.
+        {
+          $graphLookup: {
+            from: "folders",
+            startWith: "$_id",
+            connectFromField: "_id",
+            connectToField: "parentFolderId",
+            as: "descendants",
+          },
+        },
+        // Stage 3: Project just the IDs we need.
+        {
+          $project: {
+            _id: 1,
+            descendantIds: "$descendants._id",
+          },
+        },
+      ]).session(session);
+
+      // If the aggregation returns nothing, the folder doesn't exist, isn't owned, or is already trashed.
+      if (aggregationResult.length === 0) {
+        clearAuthCookie(req, res, "token");
+        // We throw an error to automatically abort the transaction.
+        const err = new Error(
+          "Folder not found, is already trashed, or access is denied."
+        );
+        err.statusCode = 403;
+        throw err;
+      }
+
+      const { _id: rootFolderId, descendantIds } = aggregationResult[0];
+      allFolderIds = [rootFolderId, ...descendantIds];
+
+      // 3. Find all files within the entire folder tree in ONE database call
+      const filesToTrash = await File.find({
+        parentFolderId: { $in: allFolderIds },
+      })
+        .select("_id")
+        .session(session)
+        .lean();
+
+      allFileIds = filesToTrash.map((file) => file._id);
+
+      // 4. Update all folders and files
+      if (allFolderIds.length > 0) {
+        await Folder.updateMany(
+          { _id: { $in: allFolderIds } },
+          { $set: { isTrashed: true } },
+          { session }
+        );
+      }
+      if (allFileIds.length > 0) {
+        await File.updateMany(
+          { _id: { $in: allFileIds } },
+          { $set: { isTrashed: true } },
+          { session }
+        );
+      }
+    }); // The transaction is automatically committed here if no errors were thrown
+
+    return res.status(200).json({
+      status: true,
+      message: "Folder and its contents moved to trash.",
+    });
   } catch (error) {
+    // If the error has a statusCode we set, use it. Otherwise, pass to the default error handler.
+    if (error.statusCode) {
+      return res
+        .status(error.statusCode)
+        .json({ status: false, errors: { message: error.message } });
+    }
     next(error);
+  } finally {
+    await session.endSession();
   }
 }

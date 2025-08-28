@@ -1,61 +1,46 @@
-import User from "../models/userModel.js";
-import { clearAuthCookie } from "../utils/clearAuthCookies.js";
+import Session from "../models/sessionModel.js";
 
 export async function checkAuth(req, res, next) {
-  const { token } = req.signedCookies || {};
-
-  if (!token) {
-    // Proper way to clear cookie
-    clearAuthCookie(req, res, "token");
-    return res.status(401).json({
-      status: false,
-      errors: {
-        message: "Unauthorized: No token found or token modified",
-      },
-    });
-  }
-
   try {
-    const { uid, expiry } = JSON.parse(
-      Buffer.from(token, "base64url").toString()
-    );
+    const { token } = req.signedCookies || {};
 
-    // Convert expiry to Date object if it's a string
-    const expiryDate = new Date(expiry);
-    const currentDate = new Date();
-
-    if (expiryDate <= currentDate) {
-      // Proper way to clear cookie
-      clearAuthCookie(req, res, "token");
+    if (!token) {
+      res.clearCookie("token");
       return res.status(401).json({
         status: false,
         errors: {
-          message: "Unauthorized: Token expired",
+          message: "Unauthorized: Session not found.",
+          path: "/drive/login",
         },
       });
     }
 
-    const foundUser = await User.findById(uid).select("-password").lean();
-    if (!foundUser) {
-      clearAuthCookie(req, res, "token");
-      return res.status(400).json({
+    const session = await Session.findById(token)
+      .populate({
+        path: "userId",
+        select: "name rootFolderId",
+      })
+      .lean();
+
+    // Check if the session or the populated user exists.
+    // This also handles cases where a user was deleted but the session wasn't.
+    if (!session || !session.userId) {
+      res.clearCookie("token");
+      return res.status(401).json({
         status: false,
         errors: {
-          message: "No user found",
+          message: "Unauthorized: Invalid session.",
+          path: "/drive/login",
         },
       });
     }
-    // Attach user  to request for downstream middleware
-    req.user = foundUser;
+
+    // Attach the populated user object to the request.
+    req.user = session.userId;
+
     next();
   } catch (err) {
-    // Proper way to clear cookie on parsing errors
-    clearAuthCookie(req, res, "token");
-    return res.status(401).json({
-      status: false,
-      errors: {
-        message: "Unauthorized: Invalid token",
-      },
-    });
+    res.clearCookie("token");
+    next(err);
   }
 }

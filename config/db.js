@@ -1,12 +1,12 @@
 import mongoose from "mongoose";
 
 async function connectToDB() {
-  const dbURL = "mongodb://localhost:27017/driveApp";
+  const dbURL = process.env.DB_URI;
   try {
     await mongoose.connect(dbURL);
-    console.log("DB connected");
-  } catch (err) {
-    console.log("Error while connecting with DB", err);
+    console.log("DB Connected");
+  } catch (error) {
+    console.log("Error", error);
     process.exit(1);
   }
 }

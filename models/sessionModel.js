@@ -1,33 +1,14 @@
 import { model, Schema } from "mongoose";
 
-const userSchema = new Schema(
+const sessionSchema = new Schema(
   {
-    name: {
-      type: String,
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
       required: true,
-      minLength: [3, "Name Should contain 3 characters"],
-      maxLength: [30, "Name Should not exceed 30 characters"],
-    },
-    email: {
-      type: String,
-      required: true,
-      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "please enter a valid email"],
-      unique: true,
-    },
-    password: {
-      type: String,
-      minLength: [4, "Password should contain minimum 4 characters"],
-      required: true,
-    },
-    rootFolderId: {
-      type: Schema.ObjectId,
-      required: true,
-      ref: "Folder",
-      default: null,
     },
   },
   {
-    strict: "throw",
     timestamps: true,
     versionKey: "__v",
     toJSON: {
@@ -52,11 +33,14 @@ const userSchema = new Schema(
     },
   }
 );
+
 // virtual key for id
-userSchema.virtual("id").get(function () {
+sessionSchema.virtual("id").get(function () {
   return this._id.toHexString();
 });
 
-const User = model("User", userSchema);
+sessionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7 * 24 * 60 * 60 });
 
-export default User;
+const Session = model("Session", sessionSchema);
+
+export default Session;

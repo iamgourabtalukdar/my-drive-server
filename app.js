@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import userRoutes from "./routes/userRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 import folderRoutes from "./routes/folderRoutes.js";
 import fileRouters from "./routes/fileRoutes.js";
 import trashRoutes from "./routes/trashRoutes.js";
@@ -10,45 +10,40 @@ import starredRoutes from "./routes/starredRoutes.js";
 import connectToDB from "./config/db.js";
 import { checkAuth } from "./middlewares/auth.js";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
 
-const PORT = 4000;
-const HOST = "127.0.0.5";
+// Load environment variables
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 4000;
+const HOST = process.env.HOST || "localhost";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STORAGE_BASE_DIR = path.resolve(__dirname, "uploads");
 
-const app = express();
-
 //cors
 app.use(
   cors({
-    origin: "http://localhost:5175",
+    origin: process.env.CLIENT_URL,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Parent-Folder-Id", "File-Count"],
     credentials: true,
   })
 );
-// app.use((req, res, next) => {
-//   res.set({
-//     "Access-Control-Allow-Origin": "http://localhost:5175",
-//     "Access-Control-Allow-Headers": "Content-Type, parentfolderid",
-//     "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE",
-//     "Access-Control-Allow-Credentials": "true",
-//   });
-//   next();
-// });
 
 // Middlewares
 app.use(express.json());
-app.use(cookieParser("G0ur@b"));
+app.use(cookieParser(process.env.COOKIE_SECRET));
 
 //custom data validation
 app.use((req, res, next) => {
   req.STORAGE_BASE_DIR = STORAGE_BASE_DIR;
   next();
 });
+
 // Routes
-app.use("/user", userRoutes);
+app.use("/auth", authRoutes);
 app.use("/folder", checkAuth, folderRoutes);
 app.use("/file", checkAuth, fileRouters);
 app.use("/trash", checkAuth, trashRoutes);
@@ -84,7 +79,7 @@ app.use((error, req, res, next) => {
   if (error.code === 11000) {
     return res.status(400).json({
       status: false,
-      errors: { message: "Email already exists" },
+      errors: { message: error.message || "Email already exists" },
     });
   }
 
@@ -96,6 +91,13 @@ app.use((error, req, res, next) => {
     });
   }
 
+  // Handle duplicate email error
+  if (error.name === "Error") {
+    return res.status(400).json({
+      status: false,
+      errors: { message: error.message },
+    });
+  }
   // Handle other unexpected errors
   res.status(500).json({
     status: false,
