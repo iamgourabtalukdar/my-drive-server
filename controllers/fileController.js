@@ -69,9 +69,11 @@ export async function uploadFiles(req, res, next) {
         errors: { message: "No File found to upload" },
       });
     }
-    // const folderId = req.body.folderId;
-    const parentFolderId =
-      req.headers["parent-folder-id"] || req.user.rootFolderId;
+
+    // Get the ID from the request body, parsed by Multer
+    const parentFolderId = req.body.parentFolderId || req.user.rootFolderId;
+    // const parentFolderId =
+    //   req.headers["parent-folder-id"] || req.user.rootFolderId;
 
     // checking parent  folder id
     if (!mongoose.isValidObjectId(parentFolderId)) {
@@ -120,23 +122,18 @@ export async function uploadFiles(req, res, next) {
 // ### RENAMING FILE
 export async function renameFile(req, res, next) {
   try {
-    const newFileName = req.body?.newName?.trim();
-    const fileId = req.params.fileId;
+    const { name } = req.body;
+    const { fileId } = req.params;
 
-    // validating file name
-    if (!newFileName) {
+    // 1. Combine all input validations at the top.
+    const trimmedName = name?.trim();
+    if (!trimmedName || trimmedName.length > 50) {
       return res.status(400).json({
         status: false,
-        errors: { message: "Invalid File name" },
+        errors: { message: "Folder name must be between 1 and 50 characters." },
       });
     }
-    // validating folder name length
-    if (newFileName.length > 50) {
-      return res.status(400).json({
-        status: false,
-        errors: { message: "File name cannot exceed 50 characters" },
-      });
-    }
+
     // checking validity of folder id
     if (!mongoose.isValidObjectId(fileId)) {
       return res.status(400).json({
@@ -157,11 +154,13 @@ export async function renameFile(req, res, next) {
       clearAuthCookie(req, res, "token");
       return res.status(403).json({
         status: false,
-        errors: { message: "You don't have access to this File" },
+        errors: {
+          message: "You don't have access to this File or it does not exist.",
+        },
       });
     }
 
-    await File.findByIdAndUpdate(foundFileId, { name: newFileName });
+    await File.findByIdAndUpdate(foundFileId, { name: trimmedName });
     return res.status(200).json({ status: true, message: "File renamed" });
   } catch (error) {
     next(error);
@@ -171,7 +170,7 @@ export async function renameFile(req, res, next) {
 // ### MOVE FILE TO TRASH
 export async function moveFileToTrash(req, res, next) {
   try {
-    const fileId = req.params.fileId;
+    const { fileId } = req.params;
 
     // checking validity of folder id
     if (!mongoose.isValidObjectId(fileId)) {
@@ -193,14 +192,9 @@ export async function moveFileToTrash(req, res, next) {
       clearAuthCookie(req, res, "token");
       return res.status(403).json({
         status: false,
-        errors: { message: "You don't have access to this File" },
-      });
-    }
-
-    if (foundFile.isTrashed) {
-      return res.status(400).json({
-        status: false,
-        errors: { message: "File is already Trashed" },
+        errors: {
+          message: "You don't have access to this File or it does not exists",
+        },
       });
     }
 
@@ -258,6 +252,58 @@ export async function recentFile(req, res, next) {
     return res.status(200).json({
       status: true,
       files: sortedFiles,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ### ADD OR REMOVE STAR FROM A FILE
+export async function changeStarOfFile(req, res, next) {
+  try {
+    const { isStarred } = req.body;
+    const { fileId } = req.params;
+
+    if (!(typeof isStarred === "boolean")) {
+      return res.status(400).json({
+        status: false,
+        errors: {
+          message: "A Boolean value (true, false) is expected for starred",
+        },
+      });
+    }
+    if (!mongoose.isValidObjectId(fileId)) {
+      // checking validity of file id
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Invalid File ID" },
+      });
+    }
+
+    // checking user permission
+    const foundFile = await File.findOne({
+      _id: fileId,
+      userId: req.user._id,
+    })
+      .select("_id starred")
+      .lean();
+
+    if (!foundFile) {
+      clearAuthCookie(req, res, "token");
+      return res.status(403).json({
+        status: false,
+        errors: {
+          message: "You don't have access to this File or it does not exist.",
+        },
+      });
+    }
+
+    await File.findByIdAndUpdate(foundFile._id, { starred: isStarred });
+    return res.status(200).json({
+      status: true,
+      message: isStarred
+        ? "File is added to Starred"
+        : "File is removed from Starred",
     });
   } catch (error) {
     next(error);

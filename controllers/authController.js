@@ -1,7 +1,8 @@
+import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 import User from "../models/userModel.js";
 import Session from "../models/sessionModel.js";
-import mongoose from "mongoose";
+import Folder from "../models/folderModel.js";
 
 // ###### login
 export const login = async (req, res, next) => {
@@ -60,7 +61,6 @@ export const login = async (req, res, next) => {
 
     return res.status(200).json({
       status: true,
-      message: "Login successful",
       data: { message: "Login successful" },
     });
   } catch (err) {
@@ -135,32 +135,36 @@ export async function signup(req, res, next) {
     if (user) {
       return res
         .status(409)
-        .json({ status: false, errors: { email: "Email already exists" } });
+        .json({ status: false, errors: { message: "Email already exists" } });
     }
 
     const userId = new mongoose.Types.ObjectId();
     const rootFolderId = new mongoose.Types.ObjectId();
 
     const hashedPassword = await bcrypt.hash(password, 12);
+    // Using .create() with a session requires passing the documents in an array
     await User.create(
-      {
-        _id: userId,
-        name,
-        email,
-        password: hashedPassword,
-        rootFolderId,
-      },
+      [
+        {
+          _id: userId,
+          name,
+          email,
+          password: hashedPassword,
+          rootFolderId,
+        },
+      ],
       { session }
     );
-
-    //check this
+    // Using .create() with a session requires passing the documents in an array
     await Folder.create(
-      {
-        _id: rootFolderId,
-        name: `root-${email}`,
-        userId,
-        parentFolderId: null,
-      },
+      [
+        {
+          _id: rootFolderId,
+          name: `root-${userId}`,
+          userId,
+          parentFolderId: null,
+        },
+      ],
       { session }
     );
 

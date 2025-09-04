@@ -7,7 +7,6 @@ import { clearAuthCookie } from "../utils/clearAuthCookies.js";
 export async function getFolder(req, res, next) {
   try {
     const folderId = req.params.folderId || req.user.rootFolderId;
-
     if (!mongoose.isValidObjectId(folderId)) {
       return res
         .status(400)
@@ -88,10 +87,7 @@ export async function createFolder(req, res, next) {
     const { name, parentFolderId: reqParentFolderId } = req.body;
     const folderName = name?.trim();
 
-    console.log(reqParentFolderId);
-    console.log(req.user.rootFolderId);
     const parentFolderId = reqParentFolderId || req.user.rootFolderId;
-    console.log(parentFolderId);
 
     // 1. Consolidated validation
     if (!folderName || folderName.length > 30) {
@@ -123,11 +119,6 @@ export async function createFolder(req, res, next) {
       });
     }
 
-    console.log({
-      name: folderName,
-      userId: req.user._id,
-      parentFolderId,
-    });
     // 3. Use idiomatic `Folder.create()` to create the new folder
     const newFolder = await Folder.create({
       name: folderName,
@@ -303,5 +294,57 @@ export async function moveFolderToTrash(req, res, next) {
     next(error);
   } finally {
     await session.endSession();
+  }
+}
+
+// ### ADD OR REMOVE STAR FROM A FOLDER
+export async function changeStarOfFolder(req, res, next) {
+  try {
+    const { isStarred } = req.body;
+    const { folderId } = req.params;
+
+    if (!(typeof isStarred === "boolean")) {
+      return res.status(400).json({
+        status: false,
+        errors: {
+          message: "A Boolean value (true, false) is expected for starred",
+        },
+      });
+    }
+    if (!mongoose.isValidObjectId(folderId)) {
+      // checking validity of folder id
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Invalid Folder ID" },
+      });
+    }
+
+    // checking user permission
+    const foundFolder = await Folder.findOne({
+      _id: folderId,
+      userId: req.user._id,
+    })
+      .select("_id starred")
+      .lean();
+
+    if (!foundFolder) {
+      clearAuthCookie(req, res, "token");
+      return res.status(403).json({
+        status: false,
+        errors: {
+          message: "You don't have access to this Folder or it does not exist.",
+        },
+      });
+    }
+
+    await Folder.findByIdAndUpdate(foundFolder._id, { starred: isStarred });
+    return res.status(200).json({
+      status: true,
+      message: isStarred
+        ? "Folder is added to Starred"
+        : "Folder is removed from Starred",
+    });
+  } catch (error) {
+    next(error);
   }
 }
