@@ -50,8 +50,10 @@ export async function getStarredContent(req, res, next) {
 
     return res.status(200).json({
       status: true,
-      folders: formattedStarredFolders,
-      files: formattedStarredFiles,
+      data: {
+        folders: formattedStarredFolders,
+        files: formattedStarredFiles,
+      },
     });
   } catch (error) {
     next(error);

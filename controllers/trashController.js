@@ -63,8 +63,10 @@ export async function getTrashContent(req, res, next) {
 
     return res.status(200).json({
       status: true,
-      folders: formattedRootTrashedFolders,
-      files: formattedTrashedFiles,
+      data: {
+        folders: formattedRootTrashedFolders,
+        files: formattedTrashedFiles,
+      },
     });
   } catch (error) {
     next(error);
@@ -244,7 +246,7 @@ export async function deleteFolder(req, res, next) {
 // ### RESTORE FILE FROM TRASH
 export async function restoreFileFromTrash(req, res, next) {
   try {
-    const fileId = req.params.fileId;
+    const { fileId } = req.params;
 
     // checking validity of folder id
     if (!mongoose.isValidObjectId(fileId)) {
