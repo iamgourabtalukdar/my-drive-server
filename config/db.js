@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 async function connectToDB() {
   const dbURL = process.env.DB_URI;
+
   try {
     await mongoose.connect(dbURL);
     console.log("DB Connected");

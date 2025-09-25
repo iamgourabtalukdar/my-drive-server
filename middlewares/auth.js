@@ -10,7 +10,7 @@ export async function checkAuth(req, res, next) {
         status: false,
         errors: {
           message: "Unauthorized: Session not found.",
-          path: "/drive/login",
+          path: "/login",
         },
       });
     }
@@ -30,7 +30,7 @@ export async function checkAuth(req, res, next) {
         status: false,
         errors: {
           message: "Unauthorized: Invalid session.",
-          path: "/drive/login",
+          path: "/login",
         },
       });
     }
