@@ -2,6 +2,13 @@ import mongoose from "mongoose";
 import Folder from "../models/folderModel.js";
 import File from "../models/fileModel.js";
 import { clearAuthCookie } from "../utils/clearAuthCookies.js";
+import {
+  changeStarOfFolderSchema,
+  createFolderSchema,
+  moveFolderToTrashSchema,
+  renameFolderSchema,
+} from "../validators/folderSchema.js";
+import { z } from "zod/v4";
 
 // ### SERVING FOLDER CONTENT
 export async function getFolder(req, res, next) {
@@ -84,27 +91,22 @@ export async function getFolder(req, res, next) {
 // ### CREATING NEW FOLDER
 export async function createFolder(req, res, next) {
   try {
-    const { name, parentFolderId: reqParentFolderId } = req.body;
-    const folderName = name?.trim();
+    console.log(req.body);
+    const { success, data, error } = createFolderSchema.safeParse({
+      body: req.body,
+    });
 
+    if (!success) {
+      return res.status(400).json({
+        status: false,
+        errors: z.flattenError(error).fieldErrors,
+      });
+    }
+    console.log(data.body);
+    const { name, parentFolderId: reqParentFolderId } = data.body;
     const parentFolderId = reqParentFolderId || req.user.rootFolderId;
 
-    // 1. Consolidated validation
-    if (!folderName || folderName.length > 30) {
-      return res.status(400).json({
-        status: false,
-        errors: { message: "Folder name must be between 1 and 30 characters." },
-      });
-    }
-
-    if (!mongoose.isValidObjectId(parentFolderId)) {
-      return res.status(400).json({
-        status: false,
-        errors: { message: "Invalid parent folder ID." },
-      });
-    }
-
-    // 2. CRUCIAL: Verify the user owns the parent folder
+    // 1. CRUCIAL: Verify the user owns the parent folder
     const parentFolder = await Folder.findOne({
       _id: parentFolderId,
       userId: req.user._id,
@@ -119,9 +121,8 @@ export async function createFolder(req, res, next) {
       });
     }
 
-    // 3. Use idiomatic `Folder.create()` to create the new folder
     const newFolder = await Folder.create({
-      name: folderName,
+      name,
       userId: req.user._id,
       parentFolderId,
     });
@@ -139,8 +140,19 @@ export async function createFolder(req, res, next) {
 // ### RENAMING FOLDER
 export async function renameFolder(req, res, next) {
   try {
-    const { name } = req.body;
-    const { folderId } = req.params;
+    const { success, data, error } = renameFolderSchema.safeParse({
+      body: req.body,
+      params: req.params,
+    });
+
+    if (!success) {
+      return res.status(400).json({
+        status: false,
+        errors: z.flattenError(error).fieldErrors,
+      });
+    }
+    const { name } = data.body;
+    const { folderId } = data.params;
 
     // 1. Combine all input validations at the top.
     const trimmedName = name?.trim();
@@ -193,18 +205,21 @@ export async function renameFolder(req, res, next) {
 
 // ### MOVE FOLDER TO TRASH
 export async function moveFolderToTrash(req, res, next) {
-  const { folderId } = req.params;
+  const { success, data, error } = moveFolderToTrashSchema.safeParse({
+    params: req.params,
+  });
 
+  if (!success) {
+    return res.status(400).json({
+      status: false,
+      errors: z.flattenError(error).fieldErrors,
+    });
+  }
+  const { folderId } = data.params;
   // 1. A single session for all operations
   const session = await mongoose.startSession();
 
   try {
-    if (!mongoose.isValidObjectId(folderId)) {
-      return res
-        .status(400)
-        .json({ status: false, errors: { message: "Invalid Folder ID" } });
-    }
-
     let allFolderIds = [];
     let allFileIds = [];
 
@@ -300,8 +315,20 @@ export async function moveFolderToTrash(req, res, next) {
 // ### ADD OR REMOVE STAR FROM A FOLDER
 export async function changeStarOfFolder(req, res, next) {
   try {
-    const { isStarred } = req.body;
-    const { folderId } = req.params;
+    const { success, data, error } = changeStarOfFolderSchema.safeParse({
+      body: req.body,
+      params: req.params,
+    });
+
+    if (!success) {
+      return res.status(400).json({
+        status: false,
+        errors: z.flattenError(error).fieldErrors,
+      });
+    }
+
+    const { isStarred } = data.body;
+    const { folderId } = data.params;
 
     if (!(typeof isStarred === "boolean")) {
       return res.status(400).json({
