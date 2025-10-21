@@ -1,6 +1,7 @@
 import Folder from "../models/folderModel.js";
 import File from "../models/fileModel.js";
 import mongoose from "mongoose";
+import { changeStarOfFileSchema } from "../validators/fileSchema.js";
 
 // ### SERVING STARRED CONTENT
 export async function getStarredContent(req, res, next) {
@@ -63,24 +64,20 @@ export async function getStarredContent(req, res, next) {
 // ### ADD OR REMOVE STAR FROM A FILE
 export async function changeStarredFile(req, res, next) {
   try {
-    const starred = req.body?.starred;
-    const fileId = req.params.fileId;
+    const { success, data, error } = changeStarOfFileSchema.safeParse({
+      body: req.body,
+      params: req.params,
+    });
 
-    if (!(typeof starred === "boolean")) {
+    if (!success) {
       return res.status(400).json({
         status: false,
-        errors: {
-          message: "A Boolean value (true, false) is expected for starred",
-        },
+        errors: z.flattenError(error).fieldErrors,
       });
     }
-    if (!mongoose.isValidObjectId(fileId)) {
-      // checking validity of file id
-      return res.status(400).json({
-        status: false,
-        errors: { message: "Invalid File ID" },
-      });
-    }
+
+    const { isStarred: starred } = data.body;
+    const { fileId } = data.params;
 
     // checking user permission
     const foundFile = await File.findOne({
@@ -124,24 +121,20 @@ export async function changeStarredFile(req, res, next) {
 // ### ADD OR REMOVE STAR FROM A FOLDER
 export async function changeStarredFolder(req, res, next) {
   try {
-    const starred = req.body?.starred;
-    const folderId = req.params.folderId;
+    const { success, data, error } = changeStarOfFolderSchema.safeParse({
+      body: req.body,
+      params: req.params,
+    });
 
-    if (!(typeof starred === "boolean")) {
+    if (!success) {
       return res.status(400).json({
         status: false,
-        errors: {
-          message: "A Boolean value (true, false) is expected for starred",
-        },
+        errors: z.flattenError(error).fieldErrors,
       });
     }
-    if (!mongoose.isValidObjectId(folderId)) {
-      // checking validity of folder id
-      return res.status(400).json({
-        status: false,
-        errors: { message: "Invalid Folder ID" },
-      });
-    }
+
+    const { isStarred: starred } = data.body;
+    const { folderId } = data.params;
 
     // checking user permission
     const foundFolder = await Folder.findOne({

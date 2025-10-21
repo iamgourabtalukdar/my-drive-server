@@ -2,17 +2,30 @@ import mongoose from "mongoose";
 import path from "path";
 import Folder from "../models/folderModel.js";
 import File from "../models/fileModel.js";
+import {
+  changeStarOfFileSchema,
+  moveFileToTrashSchema,
+  renameFileSchema,
+  serveFileSchema,
+} from "../validators/fileSchema.js";
+import { z } from "zod/v4";
+import { updateFolderSize } from "../utils/utils.js";
 
 // ### SERVING FILE
 export async function serveFile(req, res, next) {
   try {
-    const fileId = req.params.fileId;
+    const { success, data, error } = serveFileSchema.safeParse({
+      params: req.params,
+    });
 
-    if (!fileId || !mongoose.isValidObjectId(fileId)) {
-      return res
-        .status(400)
-        .json({ status: false, errors: { message: "Invalid file ID" } });
+    if (!success) {
+      return res.status(400).json({
+        status: false,
+        errors: z.flattenError(error).fieldErrors,
+      });
     }
+
+    const { fileId } = data.params;
 
     const foundFile = await File.findOne({ _id: fileId, userId: req.user._id })
       .select("name size extension userId mimetype")
@@ -60,6 +73,8 @@ export async function serveFile(req, res, next) {
 
 // ### UPLOADING FILES
 export async function uploadFiles(req, res, next) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const uploadedFiles = req.files;
 
@@ -72,8 +87,6 @@ export async function uploadFiles(req, res, next) {
 
     // Get the ID from the request body, parsed by Multer
     const parentFolderId = req.body.parentFolderId || req.user.rootFolderId;
-    // const parentFolderId =
-    //   req.headers["parent-folder-id"] || req.user.rootFolderId;
 
     // checking parent  folder id
     if (!mongoose.isValidObjectId(parentFolderId)) {
@@ -108,31 +121,42 @@ export async function uploadFiles(req, res, next) {
       userId: req.user._id,
     }));
 
-    await File.insertMany(fileDocs, { ordered: false });
+    await File.insertMany(fileDocs, { ordered: false, session });
 
+    await updateFolderSize(
+      parentFolderId,
+      fileDocs.reduce((acc, file) => acc + file.size, 0),
+      session
+    );
+    await session.commitTransaction();
     return res.status(201).json({
       status: true,
       message: "Files uploaded successfully",
     });
   } catch (error) {
+    await session.abortTransaction();
     next(error);
+  } finally {
+    await session.endSession();
   }
 }
 
 // ### RENAMING FILE
 export async function renameFile(req, res, next) {
   try {
-    const { name } = req.body;
-    const { fileId } = req.params;
+    const { success, data, error } = renameFileSchema.safeParse({
+      body: req.body,
+      params: req.params,
+    });
 
-    // 1. Combine all input validations at the top.
-    const trimmedName = name?.trim();
-    if (!trimmedName || trimmedName.length > 50) {
+    if (!success) {
       return res.status(400).json({
         status: false,
-        errors: { message: "Folder name must be between 1 and 50 characters." },
+        errors: z.flattenError(error).fieldErrors,
       });
     }
+    const { name } = data.body;
+    const { fileId } = data.params;
 
     // checking validity of folder id
     if (!mongoose.isValidObjectId(fileId)) {
@@ -160,7 +184,7 @@ export async function renameFile(req, res, next) {
       });
     }
 
-    await File.findByIdAndUpdate(foundFileId, { name: trimmedName });
+    await File.findByIdAndUpdate(foundFileId, { name });
     return res.status(200).json({ status: true, message: "File renamed" });
   } catch (error) {
     next(error);
@@ -170,15 +194,17 @@ export async function renameFile(req, res, next) {
 // ### MOVE FILE TO TRASH
 export async function moveFileToTrash(req, res, next) {
   try {
-    const { fileId } = req.params;
+    const { success, data, error } = moveFileToTrashSchema.safeParse({
+      params: req.params,
+    });
 
-    // checking validity of folder id
-    if (!mongoose.isValidObjectId(fileId)) {
+    if (!success) {
       return res.status(400).json({
         status: false,
-        errors: { message: "Invalid Folder ID" },
+        errors: z.flattenError(error).fieldErrors,
       });
     }
+    const { fileId } = data.params;
 
     // checking user permission
     const foundFile = await File.findOne({
@@ -261,24 +287,20 @@ export async function recentFile(req, res, next) {
 // ### ADD OR REMOVE STAR FROM A FILE
 export async function changeStarOfFile(req, res, next) {
   try {
-    const { isStarred } = req.body;
-    const { fileId } = req.params;
+    const { success, data, error } = changeStarOfFileSchema.safeParse({
+      body: req.body,
+      params: req.params,
+    });
 
-    if (!(typeof isStarred === "boolean")) {
+    if (!success) {
       return res.status(400).json({
         status: false,
-        errors: {
-          message: "A Boolean value (true, false) is expected for starred",
-        },
+        errors: z.flattenError(error).fieldErrors,
       });
     }
-    if (!mongoose.isValidObjectId(fileId)) {
-      // checking validity of file id
-      return res.status(400).json({
-        status: false,
-        errors: { message: "Invalid File ID" },
-      });
-    }
+
+    const { isStarred } = data.body;
+    const { fileId } = data.params;
 
     // checking user permission
     const foundFile = await File.findOne({

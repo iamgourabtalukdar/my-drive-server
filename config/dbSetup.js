@@ -13,7 +13,7 @@ try {
     validator: {
       $jsonSchema: {
         bsonType: "object",
-        required: ["_id", "name", "email", "rootFolderId"],
+        required: ["_id", "name", "email", "rootFolderId", "storageSize"],
         properties: {
           _id: {
             bsonType: "objectId",
@@ -38,6 +38,9 @@ try {
           rootFolderId: {
             bsonType: "objectId",
           },
+          storageSize: {
+            bsonType: "long",
+          },
           createdAt: {
             bsonType: "date",
           },
@@ -61,7 +64,7 @@ try {
     validator: {
       $jsonSchema: {
         bsonType: "object",
-        required: ["_id", "name", "userId", "parentFolderId"],
+        required: ["_id", "name", "userId", "parentFolderId", "size"],
         properties: {
           _id: {
             bsonType: "objectId",
@@ -78,6 +81,9 @@ try {
           },
           parentFolderId: {
             bsonType: ["objectId", "null"],
+          },
+          size: {
+            bsonType: "long",
           },
           starred: {
             bsonType: "bool",

@@ -7,16 +7,15 @@
   "type": "module",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js",
-    "dev": "node --watch app.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node --env-file=.env app.js",
+    "dev": "node --env-file=.env --watch app.js",
+    "setup": "node --env-file=.env ./config/dbSetup.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dompurify": "^3.3.0",
-    "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "google-auth-library": "^10.3.0",
     "jsdom": "^27.0.0",

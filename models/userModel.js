@@ -19,6 +19,10 @@ const userSchema = new Schema(
       minLength: [4, "Password should contain minimum 4 characters"],
     },
     picture: { type: String },
+    storageSize: {
+      type: Schema.Types.BigInt,
+      default: 15n * 1024n ** 3n,
+    },
     rootFolderId: {
       type: Schema.ObjectId,
       required: true,

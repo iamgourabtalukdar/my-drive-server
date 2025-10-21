@@ -8,10 +8,22 @@ const folderNameSchema = z
   .max(30, "Folder Name must be at most 30 characters long")
   .transform(sanitizeInput);
 
+export const getFolderSchema = z.object({
+  params: z.object({
+    folderId: z.preprocess(
+      (val) => (val ? val : undefined),
+      objectIdSchema.optional()
+    ),
+  }),
+});
+
 export const createFolderSchema = z.object({
   body: z.object({
     name: folderNameSchema,
-    parentFolderId: objectIdSchema.optional(),
+    parentFolderId: z.preprocess(
+      (val) => (val ? val : undefined),
+      objectIdSchema.optional()
+    ),
   }),
 });
 

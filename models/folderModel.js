@@ -1,4 +1,4 @@
-import { model, Schema } from "mongoose";
+import mongoose, { model, Schema } from "mongoose";
 
 const folderSchema = new Schema(
   {
@@ -17,6 +17,10 @@ const folderSchema = new Schema(
       type: Schema.ObjectId,
       ref: "Folder",
       default: null,
+    },
+    size: {
+      type: mongoose.Schema.Types.BigInt,
+      default: 0n,
     },
     starred: {
       type: Boolean,

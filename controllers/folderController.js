@@ -1,10 +1,11 @@
 import mongoose from "mongoose";
 import Folder from "../models/folderModel.js";
 import File from "../models/fileModel.js";
-import { clearAuthCookie } from "../utils/clearAuthCookies.js";
+import { clearAuthCookie } from "../utils/utils.js";
 import {
   changeStarOfFolderSchema,
   createFolderSchema,
+  getFolderSchema,
   moveFolderToTrashSchema,
   renameFolderSchema,
 } from "../validators/folderSchema.js";
@@ -13,12 +14,18 @@ import { z } from "zod/v4";
 // ### SERVING FOLDER CONTENT
 export async function getFolder(req, res, next) {
   try {
-    const folderId = req.params.folderId || req.user.rootFolderId;
-    if (!mongoose.isValidObjectId(folderId)) {
-      return res
-        .status(400)
-        .json({ status: false, errors: { message: "Invalid Folder Id" } });
+    const { success, data, error } = getFolderSchema.safeParse({
+      params: req.params,
+    });
+
+    if (!success) {
+      return res.status(400).json({
+        status: false,
+        errors: z.flattenError(error).fieldErrors,
+      });
     }
+
+    const folderId = data.params.folderId || req.user.rootFolderId;
 
     // 1. First, check if the folder exists, is owned by the user, and is not trashed.
     const folder = await Folder.findOne({
@@ -45,7 +52,7 @@ export async function getFolder(req, res, next) {
         parentFolderId: folderId,
         isTrashed: false,
       })
-        .select("name starred updatedAt")
+        .select("name starred size updatedAt")
         .lean(),
       File.find({
         userId: req.user._id,
@@ -58,11 +65,12 @@ export async function getFolder(req, res, next) {
 
     // 3. Format the results for the client. This logic remains the same.
     const formattedNestedFolders = nestedFolders.map(
-      ({ _id, name, starred, updatedAt }) => ({
+      ({ _id, name, starred, size, updatedAt }) => ({
         id: _id,
         name,
         owner: "me",
         starred,
+        size: size.toString(),
         lastModified: updatedAt,
       })
     );
@@ -91,7 +99,6 @@ export async function getFolder(req, res, next) {
 // ### CREATING NEW FOLDER
 export async function createFolder(req, res, next) {
   try {
-    console.log(req.body);
     const { success, data, error } = createFolderSchema.safeParse({
       body: req.body,
     });
@@ -102,7 +109,6 @@ export async function createFolder(req, res, next) {
         errors: z.flattenError(error).fieldErrors,
       });
     }
-    console.log(data.body);
     const { name, parentFolderId: reqParentFolderId } = data.body;
     const parentFolderId = reqParentFolderId || req.user.rootFolderId;
 
@@ -329,22 +335,6 @@ export async function changeStarOfFolder(req, res, next) {
 
     const { isStarred } = data.body;
     const { folderId } = data.params;
-
-    if (!(typeof isStarred === "boolean")) {
-      return res.status(400).json({
-        status: false,
-        errors: {
-          message: "A Boolean value (true, false) is expected for starred",
-        },
-      });
-    }
-    if (!mongoose.isValidObjectId(folderId)) {
-      // checking validity of folder id
-      return res.status(400).json({
-        status: false,
-        errors: { message: "Invalid Folder ID" },
-      });
-    }
 
     // checking user permission
     const foundFolder = await Folder.findOne({

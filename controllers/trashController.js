@@ -1,7 +1,11 @@
 import Folder from "../models/folderModel.js";
 import File from "../models/fileModel.js";
 import mongoose from "mongoose";
-import { getInnerFilesFolders } from "../utils/getInnerFilesFolders.js";
+import {
+  getInnerFilesFolders,
+  clearAuthCookie,
+  updateFolderSize,
+} from "../utils/utils.js";
 import path from "path";
 import { unlink } from "fs/promises";
 
@@ -189,6 +193,7 @@ export async function deleteFolder(req, res, next) {
     // finding nested files & folders (to N-th level deep)
     const { files, folders } = await getInnerFilesFolders(folderId);
 
+    console.log({ files, folders });
     //adding current folder
     folders.push({ _id: foundFolder._id });
 
@@ -290,8 +295,10 @@ export async function restoreFileFromTrash(req, res, next) {
 
 // ### DELETE FILE FROM TRASH
 export async function deleteFile(req, res, next) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
-    const fileId = req.params.fileId;
+    const fileId = req.params?.fileId;
 
     // checking validity of folder id
     if (!mongoose.isValidObjectId(fileId)) {
@@ -306,7 +313,7 @@ export async function deleteFile(req, res, next) {
       _id: fileId,
       userId: req.user._id,
     })
-      .select("_id extension isTrashed")
+      .select("_id extension isTrashed size parentFolderId")
       .lean();
 
     if (!foundFile) {
@@ -329,17 +336,23 @@ export async function deleteFile(req, res, next) {
       `${foundFile._id}${foundFile.extension}`
     );
 
-    // await unlink(fullFilePath).catch((e) =>
-    //   console.error(`Failed to delete file ${foundFile._id}`, e)
-    // );
+    const { size, parentFolderId } = foundFile;
 
-    // No need to use .catch() as this is the single file deletion process. if any error occurs it will be handled over global error middleware [message: Internal server error]
+    await File.findByIdAndDelete(foundFile._id, { session });
+    await updateFolderSize(parentFolderId, -size, session);
+
     await unlink(fullFilePath);
 
-    await File.findByIdAndDelete(foundFile._id);
+    await session.commitTransaction();
 
-    return res.status(200).json({ status: true, message: "File is deleted" });
+    return res.status(200).json({
+      status: true,
+      message: "File is deleted",
+    });
   } catch (error) {
+    await session.abortTransaction();
     next(error);
+  } finally {
+    await session.endSession();
   }
 }

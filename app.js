@@ -10,10 +10,6 @@ import starredRoutes from "./routes/starredRoutes.js";
 import connectToDB from "./config/db.js";
 import { checkAuth } from "./middlewares/auth.js";
 import { fileURLToPath } from "url";
-import dotenv from "dotenv";
-
-// Load environment variables
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -98,6 +94,11 @@ app.use((error, req, res, next) => {
       errors: { message: error.message },
     });
   }
+
+  // return res.status(500).json({
+  //   status: false,
+  //   errors: { message: error },
+  // });
   // Handle other unexpected errors
   res.status(500).json({
     status: false,

@@ -5,8 +5,8 @@ import Session from "../models/sessionModel.js";
 import Folder from "../models/folderModel.js";
 import { verifyIdTokenAndGetUser } from "../utils/googleAuth.js";
 import { loginSchema, registerSchema } from "../validators/authSchema.js";
-import { z } from "zod/v4";
-import { clearAuthCookie } from "../utils/clearAuthCookies.js";
+import { json, z } from "zod/v4";
+import { clearAuthCookie } from "../utils/utils.js";
 
 // ###### login
 export const login = async (req, res, next) => {
@@ -55,7 +55,12 @@ export const login = async (req, res, next) => {
       });
     }
 
-    await Session.deleteOne({ userId: user._id });
+    const loginCount = await Session.countDocuments({ userId: user._id });
+
+    if (loginCount > 1) {
+      await Session.deleteMany({ userId: user._id });
+    }
+
     const session = await Session.create({ userId: user._id });
 
     res.cookie("token", session.id, {
@@ -94,7 +99,11 @@ export const loginWithGoogle = async (req, res, next) => {
 
     if (user) {
       //login user
-      await Session.deleteOne({ userId: user._id });
+      const loginCount = await Session.countDocuments({ userId: user._id });
+
+      if (loginCount > 1) {
+        await Session.deleteMany({ userId: user._id });
+      }
       const session = await Session.create({ userId: user._id });
 
       res.cookie("token", session.id, {
@@ -175,7 +184,7 @@ export const verifyLogin = async (req, res, next) => {
     const { token } = req.signedCookies;
 
     if (!token) {
-      res.clearCookie("token");
+      clearAuthCookie(req, res, "token");
       return res.status(401).json({
         status: false,
         errors: {
@@ -186,10 +195,18 @@ export const verifyLogin = async (req, res, next) => {
     }
     const session = await Session.findById(token)
       .select("userId")
-      .populate("userId", "name");
+      .populate({
+        path: "userId",
+        select: "name picture email storageSize rootFolderId",
+        populate: {
+          path: "rootFolderId",
+          select: "size",
+        },
+      })
+      .lean();
 
     if (!session) {
-      res.clearCookie("token");
+      clearAuthCookie(req, res, "token");
       return res.status(401).json({
         status: false,
         errors: {
@@ -198,10 +215,17 @@ export const verifyLogin = async (req, res, next) => {
         },
       });
     }
+    const user = {
+      name: session.userId.name,
+      email: session.userId.email,
+      picture: session.userId.picture,
+      storageSize: session.userId.storageSize.toString(),
+      usedStorage: session.userId.rootFolderId.size.toString(),
+    };
     return res.status(200).json({
       status: true,
       message: "Valid Session.",
-      data: { user: { name: session.userId.name } },
+      data: { user },
     });
   } catch (err) {
     next(err);
