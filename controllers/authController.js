@@ -5,7 +5,7 @@ import Session from "../models/sessionModel.js";
 import Folder from "../models/folderModel.js";
 import { verifyIdTokenAndGetUser } from "../utils/googleAuth.js";
 import { loginSchema, registerSchema } from "../validators/authSchema.js";
-import { json, z } from "zod/v4";
+import { z } from "zod/v4";
 import { clearAuthCookie } from "../utils/utils.js";
 
 // ###### login

@@ -10,6 +10,7 @@ import {
 } from "../validators/fileSchema.js";
 import { z } from "zod/v4";
 import { updateFolderSize } from "../utils/utils.js";
+import User from "../models/userModel.js";
 
 // ### SERVING FILE
 export async function serveFile(req, res, next) {
@@ -111,6 +112,34 @@ export async function uploadFiles(req, res, next) {
       return res.status(401).json({ error: "You don't have permission" });
     }
 
+    // getting storage size
+    const user = await User.findById(req.user._id)
+      .select("-_id storageSize rootFolderId")
+      .populate({
+        path: "rootFolderId",
+        select: "-_id, size",
+      })
+      .lean();
+
+    const totalStorageSize = user.storageSize || 0;
+    const usedStorageSize = user.rootFolderId.size || 0;
+    const availableStorageSize = totalStorageSize - usedStorageSize;
+
+    const totalUploadSize = uploadedFiles.reduce(
+      (acc, file) => acc + file.size,
+      0
+    );
+
+    // checking if the user has enough storage space
+    if (totalUploadSize > availableStorageSize) {
+      return res.status(507).json({
+        status: false,
+        errors: {
+          message: "You don't have enough storage to upload file(s)",
+        },
+      });
+    }
+
     const fileDocs = uploadedFiles.map((file, i) => ({
       _id: req.generatedFileIds[i],
       name: file.originalname.replace(/\.[^.\s]+$/, ""),
@@ -123,11 +152,7 @@ export async function uploadFiles(req, res, next) {
 
     await File.insertMany(fileDocs, { ordered: false, session });
 
-    await updateFolderSize(
-      parentFolderId,
-      fileDocs.reduce((acc, file) => acc + file.size, 0),
-      session
-    );
+    await updateFolderSize(parentFolderId, totalUploadSize, session);
     await session.commitTransaction();
     return res.status(201).json({
       status: true,
