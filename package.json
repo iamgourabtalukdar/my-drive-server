@@ -12,6 +12,8 @@
     "setup": "node --env-file=.env ./config/dbSetup.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.940.0",
+    "@aws-sdk/s3-request-presigner": "^3.940.0",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -19,8 +21,10 @@
     "express": "^5.1.0",
     "google-auth-library": "^10.3.0",
     "jsdom": "^27.0.0",
+    "mime-types": "^3.0.2",
     "mongoose": "^8.13.2",
     "multer": "^1.4.5-lts.2",
+    "uuid": "^13.0.0",
     "zod": "^4.1.12"
   }
 }

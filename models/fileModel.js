@@ -36,6 +36,14 @@ const fileSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    isUploading: {
+      type: Boolean,
+      default: false,
+    },
+    s3Key: {
+      type: String,
+      required: true,
+    },
   },
   {
     strict: "throw",

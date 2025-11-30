@@ -27,7 +27,7 @@ export const login = async (req, res, next) => {
       .lean();
 
     if (!user) {
-      return res.status(404).json({
+      return res.status(400).json({
         status: false,
         errors: {
           message: "Invalid Login Credentials",
@@ -47,7 +47,7 @@ export const login = async (req, res, next) => {
 
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
-      return res.status(404).json({
+      return res.status(400).json({
         status: false,
         errors: {
           message: "Invalid Login Credentials",

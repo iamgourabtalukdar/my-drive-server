@@ -11,6 +11,11 @@ import {
 import { z } from "zod/v4";
 import { updateFolderSize } from "../utils/utils.js";
 import User from "../models/userModel.js";
+import { v4 as uuidv4 } from "uuid";
+import { HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import s3Client from "../utils/s3Client.js";
+import mime from "mime-types";
 
 // ### SERVING FILE
 export async function serveFile(req, res, next) {
@@ -72,24 +77,25 @@ export async function serveFile(req, res, next) {
   }
 }
 
-// ### UPLOADING FILES
-export async function uploadFiles(req, res, next) {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+// ### UPLOAD INITIATION
+export async function uploadInitiate(req, res, next) {
   try {
-    const uploadedFiles = req.files;
+    // 1. Get Metadata from Request
+    const {
+      name: filename = "untitled",
+      size: filesize,
+      contentType, // Crucial for S3 signature
+    } = req.body;
 
-    if (!uploadedFiles) {
+    if (!filename || !filesize || !contentType) {
       return res.status(400).json({
         status: false,
-        errors: { message: "No File found to upload" },
+        errors: { message: "Missing required fields" },
       });
     }
 
-    // Get the ID from the request body, parsed by Multer
     const parentFolderId = req.body.parentFolderId || req.user.rootFolderId;
-
-    // checking parent  folder id
+    // 2. Validate Parent Folder
     if (!mongoose.isValidObjectId(parentFolderId)) {
       return res.status(400).json({
         status: false,
@@ -103,66 +109,178 @@ export async function uploadFiles(req, res, next) {
 
     if (!parentFolderExists) {
       return res.status(404).json({
-        error: "Error while Uploading file : Parent Folder Not Found",
+        error: "Error while uploading: Parent Folder Not Found",
       });
     }
 
-    // checking the permissions
+    // 3. Check Permissions
     if (!parentFolderExists.userId.equals(req.user._id)) {
       return res.status(401).json({ error: "You don't have permission" });
     }
 
-    // getting storage size
+    // 4. Check Storage Quota
     const user = await User.findById(req.user._id)
       .select("-_id storageSize rootFolderId")
-      .populate({
-        path: "rootFolderId",
-        select: "-_id, size",
-      })
+      .populate({ path: "rootFolderId", select: "-_id, size" })
       .lean();
 
     const totalStorageSize = user.storageSize || 0;
     const usedStorageSize = user.rootFolderId.size || 0;
     const availableStorageSize = totalStorageSize - usedStorageSize;
 
-    const totalUploadSize = uploadedFiles.reduce(
-      (acc, file) => acc + file.size,
-      0
-    );
-
-    // checking if the user has enough storage space
-    if (totalUploadSize > availableStorageSize) {
+    if (filesize > availableStorageSize) {
       return res.status(507).json({
         status: false,
-        errors: {
-          message: "You don't have enough storage to upload file(s)",
-        },
+        errors: { message: "You don't have enough storage to upload file(s)" },
       });
     }
 
-    const fileDocs = uploadedFiles.map((file, i) => ({
-      _id: req.generatedFileIds[i],
-      name: file.originalname.replace(/\.[^.\s]+$/, ""),
-      extension: path.extname(file.originalname),
-      mimetype: file.mimetype,
-      size: file.size,
-      parentFolderId,
-      userId: req.user._id,
-    }));
+    // 5. Generate Unique S3 Key
+    // Format: userId/uuid-cleanFilename.ext
+    const extension = path.extname(filename);
+    const cleanName = filename
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[^a-zA-Z0-9]/g, "-");
+    const s3Key = `${req.user._id}/${uuidv4()}-${cleanName}${extension}`;
 
-    await File.insertMany(fileDocs, { ordered: false, session });
+    // 6. Generate Pre-Signed URL
+    const command = new PutObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: s3Key,
+      ContentType: contentType, // Must match what frontend sends
+      Metadata: {
+        originalName: filename,
+        userId: req.user._id.toString(),
+      },
+    });
 
-    await updateFolderSize(parentFolderId, totalUploadSize, session);
-    await session.commitTransaction();
-    return res.status(201).json({
+    // Link expires in 15 minutes (900 seconds)
+    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 });
+
+    // 7. Respond to Frontend
+    // We DO NOT save to MongoDB yet. We wait for the 'uploadComplete' call.
+    return res.status(200).json({
       status: true,
-      message: "Files uploaded successfully",
+      data: {
+        message: "Upload initiation successful",
+        signedUrl,
+        fileKey: s3Key,
+      },
     });
   } catch (error) {
+    next(error);
+  }
+}
+
+// ### UPLOAD COMPLETION
+export async function uploadComplete(req, res, next) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { name, size, fileKey } = req.body;
+
+    // 1. VALIDATE INPUT
+    if (!fileKey || !name || !size) {
+      throw new Error("Missing required fields for upload completion.");
+    }
+
+    const parentFolderId = req.body.parentFolderId || req.user.rootFolderId;
+
+    if (!mongoose.isValidObjectId(parentFolderId)) {
+      return res.status(400).json({
+        status: false,
+        errors: { message: "Invalid parent folder id" },
+      });
+    }
+
+    // 2. VERIFY FILE EXISTS IN AWS S3 (Security Check)
+    try {
+      const headCommand = new HeadObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: fileKey,
+      });
+      const s3Metadata = await s3Client.send(headCommand);
+
+      // Security: Prevent storage quota cheating
+      // Ensure the file size in S3 matches what the frontend claims
+      if (s3Metadata.ContentLength !== size) {
+        throw new Error("File size mismatch. Integrity check failed.");
+      }
+    } catch (s3Error) {
+      if (s3Error.name === "NotFound") {
+        return res.status(404).json({
+          status: false,
+          message: "File not found in storage bucket. Upload may have failed.",
+        });
+      }
+      throw s3Error; // Rethrow other AWS errors
+    }
+
+    const userId = req.user._id;
+
+    // 3. CHECK PARENT FOLDER
+    const parentFolder = await Folder.findOne({
+      _id: parentFolderId,
+      userId: userId,
+    }).session(session);
+
+    if (!parentFolder) {
+      return res.status(404).json({
+        status: false,
+        message: "Parent folder not found or access denied.",
+      });
+    }
+
+    // 4. CREATE FILE DOCUMENT
+    // We strip the extension from the name for the DB "name" field,
+    // as we store extension separately.
+    const extension = name.substring(name.lastIndexOf("."));
+    const nameWithoutExt = name.replace(/\.[^/.]+$/, "");
+    const mimetype = mime.lookup(extension) || "application/octet-stream";
+
+    const newFile = new File({
+      name: nameWithoutExt,
+      size,
+      extension,
+      mimetype,
+      userId,
+      parentFolderId,
+      s3Key: fileKey, // IMPORTANT: Save the S3 key provided by initiate
+      isUploading: false, // It's done
+    });
+
+    await newFile.save({ session });
+
+    // 5. UPDATE USER STORAGE QUOTA
+    await User.findByIdAndUpdate(
+      userId,
+      { $inc: { storageSize: size } },
+      { session }
+    );
+
+    // 6. UPDATE FOLDER SIZE (Assuming you have this util)
+    // If your util doesn't support sessions, you might need to update it
+    // or just do: await Folder.findByIdAndUpdate(parentFolderId, { $inc: { size: size } }, { session });
+    await updateFolderSize(parentFolderId, size, session);
+
+    // 7. COMMIT TRANSACTION
+    await session.commitTransaction();
+
+    return res.status(201).json({
+      status: true,
+      data: {
+        message: "File uploaded and verified successfully.",
+        file: newFile,
+      },
+    });
+  } catch (error) {
+    // If anything fails, undo all DB changes
     await session.abortTransaction();
+    console.error("Upload Complete Error:", error);
     next(error);
   } finally {
-    await session.endSession();
+    session.endSession();
   }
 }
 
