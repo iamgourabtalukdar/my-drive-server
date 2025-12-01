@@ -1,4 +1,4 @@
-import { z } from "zod/v4";
+import { size, z } from "zod/v4";
 import { objectIdSchema } from "./utils.js";
 import { sanitizeInput } from "./sanitizer.js";
 
@@ -46,5 +46,23 @@ export const changeStarOfFileSchema = z.object({
   }),
   params: z.object({
     fileId: objectIdSchema,
+  }),
+});
+
+export const uploadInitiateSchema = z.object({
+  body: z.object({
+    name: fileNameSchema,
+    size: z.number().positive("File size must be a positive number"),
+    contentType: z.string().nonempty("Content type is required"),
+    parentFolderId: objectIdSchema.optional(),
+  }),
+});
+
+export const uploadCompleteSchema = z.object({
+  body: z.object({
+    name: fileNameSchema,
+    size: z.number().positive("File size must be a positive number"),
+    fileKey: z.string().nonempty("File key is required"),
+    parentFolderId: objectIdSchema.optional(),
   }),
 });

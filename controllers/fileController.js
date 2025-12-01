@@ -7,12 +7,18 @@ import {
   moveFileToTrashSchema,
   renameFileSchema,
   serveFileSchema,
+  uploadCompleteSchema,
+  uploadInitiateSchema,
 } from "../validators/fileSchema.js";
 import { z } from "zod/v4";
 import { updateFolderSize } from "../utils/utils.js";
 import User from "../models/userModel.js";
 import { v4 as uuidv4 } from "uuid";
-import { HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import s3Client from "../utils/s3Client.js";
 import mime from "mime-types";
@@ -34,7 +40,7 @@ export async function serveFile(req, res, next) {
     const { fileId } = data.params;
 
     const foundFile = await File.findOne({ _id: fileId, userId: req.user._id })
-      .select("name size extension userId mimetype")
+      .select("name s3Key size extension mimetype")
       .lean();
 
     if (!foundFile) {
@@ -43,35 +49,25 @@ export async function serveFile(req, res, next) {
         errors: { message: "File Not Found Or You don't have the permission" },
       });
     }
-    const fullFilePath = path.resolve(
-      req.STORAGE_BASE_DIR,
-      foundFile._id + foundFile.extension
-    );
-    // checking path vulnerability
-    if (!fullFilePath.startsWith(req.STORAGE_BASE_DIR)) {
-      return res.status(403).json({ error: "Access Denied!" });
-    }
 
-    res.set("Content-Type", foundFile.mimetype);
+    const disposition =
+      req.query.action === "download"
+        ? `attachment; filename="${foundFile.name}${foundFile.extension}"`
+        : `inline; filename="${foundFile.name}${foundFile.extension}"`;
 
-    // if it is a download request
-    if (req.query.action === "download") {
-      res.set(
-        "Content-Disposition",
-        `Attachment; filename=${foundFile.name}${foundFile.extension}`
-      );
-    } else {
-      res.set(
-        "Content-Disposition",
-        `inline; filename=${foundFile.name}${foundFile.extension}`
-      );
-    }
-    // send the file
-    res.sendFile(fullFilePath, (error) => {
-      if (error && !res.headersSent) {
-        res.status(404).json({ error: "File not found!" });
-      }
+    const command = new GetObjectCommand({
+      Bucket: process.env.AWS_BUCKET_NAME,
+      Key: foundFile.s3Key,
+      ResponseContentType: foundFile.mimetype,
+      ResponseContentDisposition: disposition,
     });
+
+    // Generate a URL valid for 5 minutes (300 seconds)
+    const signedUrl = await getSignedUrl(s3Client, command, {
+      expiresIn: 300,
+    });
+
+    return res.redirect(signedUrl);
   } catch (error) {
     next(error);
   }
@@ -80,28 +76,24 @@ export async function serveFile(req, res, next) {
 // ### UPLOAD INITIATION
 export async function uploadInitiate(req, res, next) {
   try {
+    const { success, data, error } = uploadInitiateSchema.safeParse({
+      body: req.body,
+    });
+
+    if (!success) {
+      return res.status(400).json({
+        status: false,
+        errors: z.flattenError(error).fieldErrors,
+      });
+    }
     // 1. Get Metadata from Request
     const {
-      name: filename = "untitled",
+      name: filename,
       size: filesize,
       contentType, // Crucial for S3 signature
-    } = req.body;
+    } = data.body;
 
-    if (!filename || !filesize || !contentType) {
-      return res.status(400).json({
-        status: false,
-        errors: { message: "Missing required fields" },
-      });
-    }
-
-    const parentFolderId = req.body.parentFolderId || req.user.rootFolderId;
-    // 2. Validate Parent Folder
-    if (!mongoose.isValidObjectId(parentFolderId)) {
-      return res.status(400).json({
-        status: false,
-        errors: { message: "Invalid parent folder id" },
-      });
-    }
+    const parentFolderId = data.body.parentFolderId || req.user.rootFolderId;
 
     const parentFolderExists = await Folder.findById(parentFolderId)
       .select({ userId: 1 })
@@ -178,21 +170,18 @@ export async function uploadComplete(req, res, next) {
   session.startTransaction();
 
   try {
-    const { name, size, fileKey } = req.body;
-
-    // 1. VALIDATE INPUT
-    if (!fileKey || !name || !size) {
-      throw new Error("Missing required fields for upload completion.");
-    }
-
-    const parentFolderId = req.body.parentFolderId || req.user.rootFolderId;
-
-    if (!mongoose.isValidObjectId(parentFolderId)) {
+    const { success, data, error } = uploadCompleteSchema.safeParse({
+      body: req.body,
+    });
+    if (!success) {
       return res.status(400).json({
         status: false,
-        errors: { message: "Invalid parent folder id" },
+        errors: z.flattenError(error).fieldErrors,
       });
     }
+    const { name, size, fileKey } = data.body;
+
+    const parentFolderId = data.body.parentFolderId || req.user.rootFolderId;
 
     // 2. VERIFY FILE EXISTS IN AWS S3 (Security Check)
     try {
@@ -259,9 +248,7 @@ export async function uploadComplete(req, res, next) {
       { session }
     );
 
-    // 6. UPDATE FOLDER SIZE (Assuming you have this util)
-    // If your util doesn't support sessions, you might need to update it
-    // or just do: await Folder.findByIdAndUpdate(parentFolderId, { $inc: { size: size } }, { session });
+    // 6. UPDATE FOLDER SIZE
     await updateFolderSize(parentFolderId, size, session);
 
     // 7. COMMIT TRANSACTION
@@ -300,14 +287,6 @@ export async function renameFile(req, res, next) {
     }
     const { name } = data.body;
     const { fileId } = data.params;
-
-    // checking validity of folder id
-    if (!mongoose.isValidObjectId(fileId)) {
-      return res.status(400).json({
-        status: false,
-        errors: { message: "Invalid Folder ID" },
-      });
-    }
 
     // checking user permission
     const foundFileId = await File.findOne({
