@@ -19,7 +19,7 @@ export async function getInnerFilesFolders(folderId = null) {
   let innerFilesArr = await File.find({
     parentFolderId: folderId,
   })
-    .select("_id extension")
+    .select("_id s3Key size")
     .lean();
 
   for (const innerFolder of innerFoldersArr) {

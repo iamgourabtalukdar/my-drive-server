@@ -1,12 +1,12 @@
-import { size, z } from "zod/v4";
+import { z } from "zod/v4";
 import { objectIdSchema } from "./utils.js";
 import { sanitizeInput } from "./sanitizer.js";
 
 const fileNameSchema = z
   .string("Please enter a valid name string")
   .trim()
-  .min(1, "Folder Name must be at least 1 characters long")
-  .max(50, "Folder Name must be at most 50 characters long")
+  .min(1, "File Name must be at least 1 characters long")
+  .max(50, "File Name must be at most 50 characters long")
   .transform(sanitizeInput);
 
 export const serveFileSchema = z.object({
@@ -14,13 +14,6 @@ export const serveFileSchema = z.object({
     fileId: objectIdSchema,
   }),
 });
-
-// export const createFolderSchema = z.object({
-//   body: z.object({
-//     name: fileNameSchema,
-//     parentFolderId: objectIdSchema.optional(),
-//   }),
-// });
 
 export const renameFileSchema = z.object({
   body: z.object({

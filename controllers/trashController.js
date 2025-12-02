@@ -8,6 +8,11 @@ import {
 } from "../utils/utils.js";
 import path from "path";
 import { unlink } from "fs/promises";
+import { serveFileSchema } from "../validators/fileSchema.js";
+import { z } from "zod/v4";
+import { DeleteObjectCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3";
+import s3Client from "../utils/s3Client.js";
+import { deleteFolderSchema } from "../validators/trashSchema.js";
 
 // ### SERVING TRASH CONTENT
 export async function getTrashContent(req, res, next) {
@@ -153,25 +158,28 @@ export async function restoreFolderFromTrash(req, res, next) {
   }
 }
 
-// ### DELETE FOLDER FROM TRASH
+// ### PERMANENTLY DELETE FOLDER AND INNER FILES, FOLDERS FROM TRASH
 export async function deleteFolder(req, res, next) {
   try {
-    const folderId = req.params.folderId;
+    const { success, data, error } = deleteFolderSchema.safeParse({
+      params: req.params,
+    });
 
-    // checking validity of folder id
-    if (!mongoose.isValidObjectId(folderId)) {
+    if (!success) {
       return res.status(400).json({
         status: false,
-        errors: { message: "Invalid Folder ID" },
+        errors: z.flattenError(error).fieldErrors,
       });
     }
+
+    const { folderId } = data.params;
 
     // checking user permission
     const foundFolder = await Folder.findOne({
       _id: folderId,
       userId: req.user._id,
     })
-      .select("_id isTrashed")
+      .select("_id isTrashed size parentFolderId")
       .lean();
 
     if (!foundFolder) {
@@ -193,7 +201,6 @@ export async function deleteFolder(req, res, next) {
     // finding nested files & folders (to N-th level deep)
     const { files, folders } = await getInnerFilesFolders(folderId);
 
-    console.log({ files, folders });
     //adding current folder
     folders.push({ _id: foundFolder._id });
 
@@ -203,25 +210,24 @@ export async function deleteFolder(req, res, next) {
     try {
       session.startTransaction();
 
-      // files.forEach(async (file) => {
-      //   const fullPath = path.resolve(
-      //     req.STORAGE_BASE_DIR,
-      //     file._id + file.extension
-      //   );
-      //   await unlink(fullPath);
-      // });
+      if (files.length > 0) {
+        // 1. Prepare S3 Objects for Deletion (Filter out files without keys to prevent errors)
+        const objectsToDelete = files
+          .filter((f) => f.s3Key)
+          .map((file) => ({ Key: file.s3Key }));
 
-      await Promise.all(
-        files.map(async (file) => {
-          const fullPath = path.resolve(
-            req.STORAGE_BASE_DIR,
-            file._id + file.extension
-          );
-          return unlink(fullPath).catch((e) =>
-            console.error(`Failed to delete file ${file._id}`, e)
-          );
-        })
-      );
+        // 2. AWS S3 Batch Delete
+        if (objectsToDelete.length > 0) {
+          const deleteCommand = new DeleteObjectsCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Delete: {
+              Objects: objectsToDelete,
+              Quiet: true,
+            },
+          });
+          await s3Client.send(deleteCommand);
+        }
+      }
 
       await Folder.deleteMany(
         { _id: { $in: folders.map((folder) => folder._id) } },
@@ -230,6 +236,13 @@ export async function deleteFolder(req, res, next) {
       await File.deleteMany(
         { _id: { $in: files.map((file) => file._id) } },
         { session }
+      );
+
+      // update folder sizes by subtracting file sizes
+      await updateFolderSize(
+        foundFolder.parentFolderId,
+        -foundFolder.size,
+        session
       );
 
       await session.commitTransaction();
@@ -293,27 +306,29 @@ export async function restoreFileFromTrash(req, res, next) {
   }
 }
 
-// ### DELETE FILE FROM TRASH
+// ### PERMANENTLY DELETE FILE FROM TRASH
 export async function deleteFile(req, res, next) {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const fileId = req.params?.fileId;
+    const { success, data, error } = serveFileSchema.safeParse({
+      params: req.params,
+    });
 
-    // checking validity of folder id
-    if (!mongoose.isValidObjectId(fileId)) {
+    if (!success) {
       return res.status(400).json({
         status: false,
-        errors: { message: "Invalid Folder ID" },
+        errors: z.flattenError(error).fieldErrors,
       });
     }
+    const { fileId } = data.params;
 
     // checking user permission
     const foundFile = await File.findOne({
       _id: fileId,
       userId: req.user._id,
     })
-      .select("_id extension isTrashed size parentFolderId")
+      .select("_id isTrashed size parentFolderId s3Key")
       .lean();
 
     if (!foundFile) {
@@ -331,23 +346,27 @@ export async function deleteFile(req, res, next) {
       });
     }
 
-    const fullFilePath = path.resolve(
-      req.STORAGE_BASE_DIR,
-      `${foundFile._id}${foundFile.extension}`
-    );
+    const { size, parentFolderId, s3Key } = foundFile;
 
-    const { size, parentFolderId } = foundFile;
+    if (s3Key) {
+      const deleteCommand = new DeleteObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: s3Key,
+      });
+      await s3Client.send(deleteCommand);
+    }
 
+    // --- MONGODB DELETION ---
     await File.findByIdAndDelete(foundFile._id, { session });
-    await updateFolderSize(parentFolderId, -size, session);
 
-    await unlink(fullFilePath);
+    // Decrease Folder Size
+    await updateFolderSize(parentFolderId, -size, session);
 
     await session.commitTransaction();
 
     return res.status(200).json({
       status: true,
-      message: "File is deleted",
+      message: "File is deleted permanently",
     });
   } catch (error) {
     await session.abortTransaction();

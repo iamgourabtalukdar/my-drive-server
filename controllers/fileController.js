@@ -83,7 +83,9 @@ export async function uploadInitiate(req, res, next) {
     if (!success) {
       return res.status(400).json({
         status: false,
-        errors: z.flattenError(error).fieldErrors,
+        errors: {
+          message: z.flattenError(error).fieldErrors.body.join(", "),
+        },
       });
     }
     // 1. Get Metadata from Request
