@@ -1,22 +1,17 @@
-import express from "express";
-import path from "path";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import authRoutes from "./routes/authRoutes.js";
-import folderRoutes from "./routes/folderRoutes.js";
-import fileRouters from "./routes/fileRoutes.js";
-import trashRoutes from "./routes/trashRoutes.js";
-import starredRoutes from "./routes/starredRoutes.js";
+import express from "express";
 import connectToDB from "./config/db.js";
 import { checkAuth } from "./middlewares/auth.js";
-import { fileURLToPath } from "url";
+import authRoutes from "./routes/authRoutes.js";
+import fileRouters from "./routes/fileRoutes.js";
+import folderRoutes from "./routes/folderRoutes.js";
+import starredRoutes from "./routes/starredRoutes.js";
+import trashRoutes from "./routes/trashRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const HOST = process.env.HOST || "localhost";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const STORAGE_BASE_DIR = path.resolve(__dirname, "uploads");
 
 //cors
 app.use(
@@ -31,12 +26,6 @@ app.use(
 // Middlewares
 app.use(express.json());
 app.use(cookieParser(process.env.COOKIE_SECRET));
-
-//custom data validation
-app.use((req, res, next) => {
-  req.STORAGE_BASE_DIR = STORAGE_BASE_DIR;
-  next();
-});
 
 // Routes
 app.use("/auth", authRoutes);

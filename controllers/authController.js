@@ -219,8 +219,8 @@ export const verifyLogin = async (req, res, next) => {
       name: session.userId.name,
       email: session.userId.email,
       picture: session.userId.picture,
-      storageSize: session.userId.storageSize.toString(),
-      usedStorage: session.userId.rootFolderId.size.toString(),
+      storageSize: session.userId.storageSize,
+      usedStorage: session.userId.rootFolderId.size,
     };
     return res.status(200).json({
       status: true,

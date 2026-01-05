@@ -19,9 +19,10 @@ import {
   HeadObjectCommand,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getSignedUrl as getS3SignedUrl } from "@aws-sdk/s3-request-presigner";
 import s3Client from "../utils/s3Client.js";
 import mime from "mime-types";
+import { getSignedUrl as getCloudFrontSignedURL } from "@aws-sdk/cloudfront-signer";
 
 // ### SERVING FILE
 export async function serveFile(req, res, next) {
@@ -50,21 +51,23 @@ export async function serveFile(req, res, next) {
       });
     }
 
-    const disposition =
-      req.query.action === "download"
-        ? `attachment; filename="${foundFile.name}${foundFile.extension}"`
-        : `inline; filename="${foundFile.name}${foundFile.extension}"`;
+    // const disposition =
+    //   req.query.action === "download"
+    //     ? `attachment; filename="${foundFile.name}${foundFile.extension}"`
+    //     : `inline; filename="${foundFile.name}${foundFile.extension}"`;
 
-    const command = new GetObjectCommand({
-      Bucket: process.env.AWS_BUCKET_NAME,
-      Key: foundFile.s3Key,
-      ResponseContentType: foundFile.mimetype,
-      ResponseContentDisposition: disposition,
-    });
-
-    // Generate a URL valid for 5 minutes (300 seconds)
-    const signedUrl = await getSignedUrl(s3Client, command, {
-      expiresIn: 300,
+    const url = `https://${process.env.AWS_CLOUDFRONT_DISTRIBUTION}/${foundFile.s3Key}`;
+    const keyPairId = process.env.AWS_CLOUDFRONT_KEY_PAIR_ID;
+    const privateKey = process.env.AWS_CLOUDFRONT_PRIVATE_KEY.replace(
+      /\\n/g,
+      "\n"
+    );
+    const expiresIn = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
+    const signedUrl = getCloudFrontSignedURL({
+      url,
+      keyPairId,
+      dateLessThan: expiresIn,
+      privateKey,
     });
 
     return res.redirect(signedUrl);
@@ -149,7 +152,9 @@ export async function uploadInitiate(req, res, next) {
     });
 
     // Link expires in 15 minutes (900 seconds)
-    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 });
+    const signedUrl = await getS3SignedUrl(s3Client, command, {
+      expiresIn: 900,
+    });
 
     // 7. Respond to Frontend
     // We DO NOT save to MongoDB yet. We wait for the 'uploadComplete' call.
