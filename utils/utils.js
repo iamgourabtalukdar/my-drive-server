@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
-import File from "../models/fileModel.js";
-import Folder from "../models/folderModel.js";
+import File from "../models/File.model.js";
+import Folder from "../models/Folder.model.js";
 
 export async function getInnerFilesFolders(folderId = null) {
   if (!folderId) {
@@ -31,24 +31,6 @@ export async function getInnerFilesFolders(folderId = null) {
     files: innerFilesArr,
     folders: innerFoldersArr,
   };
-}
-
-export function clearAuthCookie(req = null, res, cookieName) {
-  const options = {
-    path: "/",
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    // secure: process.env.NODE_ENV === "production",
-    // sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
-  };
-
-  // Add domain if request object is provided
-  if (req && req.hostname) {
-    options.domain = req.hostname;
-  }
-
-  res.clearCookie(cookieName, options);
 }
 
 export async function updateFolderSize(folderId, deltaSize, session) {

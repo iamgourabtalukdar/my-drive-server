@@ -1,4 +1,5 @@
 import { model, Schema } from "mongoose";
+import { mongooseTransform } from "../utils/mongooseTransform.js";
 
 const fileSchema = new Schema(
   {
@@ -15,7 +16,7 @@ const fileSchema = new Schema(
     extension: {
       type: String,
     },
-    mimetype: {
+    contentType: {
       type: String,
     },
     userId: {
@@ -36,10 +37,6 @@ const fileSchema = new Schema(
       type: Boolean,
       default: false,
     },
-    isUploading: {
-      type: Boolean,
-      default: false,
-    },
     s3Key: {
       type: String,
       required: true,
@@ -47,35 +44,12 @@ const fileSchema = new Schema(
   },
   {
     strict: "throw",
-    timestamps: true,
     versionKey: "__v",
-    toJSON: {
-      virtuals: true, // Include virtuals (like 'id')
-      transform: (doc, ret) => {
-        delete ret._id; // Remove _id
-        delete ret.createdAt; // Remove createdAt
-        delete ret.updatedAt; // Remove updatedAt
-        delete ret.__v; // Remove __v
-        return ret;
-      },
-    },
-    toObject: {
-      virtuals: true,
-      transform: (doc, ret) => {
-        delete ret._id;
-        delete ret.createdAt;
-        delete ret.updatedAt;
-        delete ret.__v;
-        return ret;
-      },
-    },
+    timestamps: true,
+    toJSON: { transform: mongooseTransform },
+    toObject: { transform: mongooseTransform },
   }
 );
-
-// virtual key for id
-fileSchema.virtual("id").get(function () {
-  return this._id.toHexString();
-});
 
 const File = model("File", fileSchema);
 export default File;

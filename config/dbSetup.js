@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 import connectToDB from "./db.js";
-import { is } from "zod/locales";
 
 try {
   await connectToDB();

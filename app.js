@@ -2,23 +2,19 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import connectToDB from "./config/db.js";
-import { checkAuth } from "./middlewares/auth.js";
-import authRoutes from "./routes/authRoutes.js";
-import fileRouters from "./routes/fileRoutes.js";
-import folderRoutes from "./routes/folderRoutes.js";
-import starredRoutes from "./routes/starredRoutes.js";
-import trashRoutes from "./routes/trashRoutes.js";
+import { authMiddleware } from "./middlewares/auth.middleware.js";
+import errorHandler from "./middlewares/errorHandler.middleware.js";
+import authRoutes from "./routes/auth.routes.js";
+import fileRouters from "./routes/file.routes.js";
+import folderRoutes from "./routes/folder.routes.js";
+import starredRoutes from "./routes/starred.routes.js";
+import trashRoutes from "./routes/trash.routes.js";
 
 const app = express();
-const PORT = process.env.PORT || 4000;
-const HOST = process.env.HOST || "localhost";
 
-//cors
 app.use(
   cors({
     origin: process.env.CLIENT_URL,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allowedHeaders: ["Content-Type", "Parent-Folder-Id", "File-Count"],
     credentials: true,
   })
 );
@@ -27,85 +23,48 @@ app.use(
 app.use(express.json());
 app.use(cookieParser(process.env.COOKIE_SECRET));
 
-// Routes
-app.use("/auth", authRoutes);
-app.use("/folder", checkAuth, folderRoutes);
-app.use("/file", checkAuth, fileRouters);
-app.use("/trash", checkAuth, trashRoutes);
-app.use("/starred", checkAuth, starredRoutes);
+// ### Routes
+// Health Check Route
+app.get("/", (req, res) => {
+  res.json({
+    status: "OK",
+    message: "Storage App Backend is Running 🚀",
+  });
+});
+app.use("/api/auth", authRoutes);
+app.use("/api/folders", authMiddleware, folderRoutes);
+app.use("/api/files", authMiddleware, fileRouters);
+app.use("/api/trash", authMiddleware, trashRoutes);
+app.use("/api/starred", authMiddleware, starredRoutes);
 
 // 404 Handler
 app.use((req, res) => {
   res.status(404).json({
-    status: false,
-    errors: { message: "Route not found" },
+    success: false,
+    error: {
+      type: "NOT_FOUND",
+      message: "Route not found",
+    },
   });
 });
-
 // Global Error Handler
-app.use((error, req, res, next) => {
-  console.error(error); // Log the error for debugging
+app.use(errorHandler);
 
-  // Handle validation errors
-  if (error.name === "ValidationError") {
-    const errors = Object.keys(error.errors).reduce((acc, key) => {
-      acc[key] = error.errors[key].message;
-      return acc;
-    }, {});
-
-    return res.status(400).json({
-      status: false,
-      message: "Validation failed",
-      errors,
-    });
-  }
-
-  // Handle duplicate email error
-  if (error.code === 11000) {
-    return res.status(400).json({
-      status: false,
-      errors: { message: error.message || "Email already exists" },
-    });
-  }
-
-  // Handle custom errors with status codes
-  if (error.statusCode) {
-    return res.status(error.statusCode).json({
-      status: false,
-      errors: { message: error.message },
-    });
-  }
-
-  // Handle duplicate email error
-  if (error.name === "Error") {
-    return res.status(400).json({
-      status: false,
-      errors: { message: error.message },
-    });
-  }
-
-  // return res.status(500).json({
-  //   status: false,
-  //   errors: { message: error },
-  // });
-  // Handle other unexpected errors
-  res.status(500).json({
-    status: false,
-    errors: { message: "Internal server error" },
-  });
-});
-
-// Start Server
-const startServer = async () => {
+// Server Start
+async function startServer() {
   try {
     await connectToDB();
+
+    const PORT = process.env.PORT || 4000;
+    const HOST = process.env.HOST || "localhost";
+
     app.listen(PORT, HOST, () => {
-      console.log(`Server running on http://${HOST}:${PORT}`);
+      console.log(`🚀 Server is running at http://${HOST}:${PORT}`);
     });
-  } catch (err) {
-    console.error("Failed to start server:", err);
+  } catch (error) {
+    console.error("❌ Failed to start server:", error);
     process.exit(1);
   }
-};
+}
 
 startServer();
