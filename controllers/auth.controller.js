@@ -1,3 +1,4 @@
+import { UAParser } from "ua-parser-js";
 import { MAX_COOKIE_AGE } from "../config/constants.js";
 import * as services from "../services/auth.service.js";
 import asyncHandler from "../utils/asyncHandler.js";
@@ -6,12 +7,19 @@ import { removeCookie, setCookie } from "../utils/cookie.js";
 // ###### login
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
+  const parser = new UAParser(req.headers["user-agent"]);
+  const ua = parser.getResult();
 
   const { user, sessionId } = await services.loginUser({
     email,
     password,
     ip: req.ip,
     userAgent: req.headers["user-agent"],
+    device: {
+      type: ua.device.type || "desktop",
+      os: ua.os.name,
+      browser: ua.browser.name,
+    },
   });
 
   setCookie(res, "sid", sessionId, {
@@ -28,11 +36,18 @@ export const login = asyncHandler(async (req, res) => {
 // ##### loginWithGoogle
 export const loginWithGoogle = asyncHandler(async (req, res, next) => {
   const { idToken } = req.body;
+  const parser = new UAParser(req.headers["user-agent"]);
+  const ua = parser.getResult();
 
   const { user, sessionId } = await services.loginWithGoogle({
     idToken,
     ip: req.ip,
     userAgent: req.headers["user-agent"],
+    device: {
+      type: ua.device.type || "desktop",
+      os: ua.os.name,
+      browser: ua.browser.name,
+    },
   });
   setCookie(res, "sid", sessionId, {
     maxAge: MAX_COOKIE_AGE,

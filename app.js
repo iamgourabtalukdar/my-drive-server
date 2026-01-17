@@ -12,11 +12,14 @@ import trashRoutes from "./routes/trash.routes.js";
 
 const app = express();
 
+// REQUIRED when using Nginx / reverse proxy
+app.set("trust proxy", true);
+
 app.use(
   cors({
     origin: process.env.CLIENT_URL,
     credentials: true,
-  })
+  }),
 );
 
 // Middlewares

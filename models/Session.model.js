@@ -25,6 +25,8 @@ const sessionSchema = new Schema(
 
     device: {
       type: String,
+      os: String,
+      browser: String,
     },
 
     lastActiveAt: {
@@ -39,12 +41,12 @@ const sessionSchema = new Schema(
     timestamps: true,
     toJSON: { transform: mongooseTransform },
     toObject: { transform: mongooseTransform },
-  }
+  },
 );
 
 sessionSchema.index(
   { createdAt: 1 },
-  { expireAfterSeconds: MAX_COOKIE_AGE / 1000 }
+  { expireAfterSeconds: MAX_COOKIE_AGE / 1000 },
 );
 
 const Session = model("Session", sessionSchema);
