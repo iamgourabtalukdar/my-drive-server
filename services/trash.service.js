@@ -8,7 +8,7 @@ export async function getTrashContent({ userId }) {
     userId,
     isTrashed: true,
   })
-    .select("_id name userId parentFolderId updatedAt starred")
+    .select("_id name size userId parentFolderId updatedAt isStarred")
     .lean();
 
   // Create a Set for faster lookups
@@ -28,29 +28,30 @@ export async function getTrashContent({ userId }) {
     isTrashed: true,
     parentFolderId: { $nin: [...folderIds] }, // Exclude files in any trashed folder
   })
-    .select("_id name size extension userId updatedAt starred")
+    .select("_id name size extension userId updatedAt isStarred")
     .lean();
 
   // format the folders
   const formattedRootTrashedFolders = rootTrashedFolders.map(
-    ({ _id, name, updatedAt, starred }) => ({
+    ({ _id, name, size, updatedAt, isStarred }) => ({
       id: _id,
       name,
+      size: size.toString(),
       owner: "me",
-      starred,
+      isStarred,
       isTrashed: true,
       lastModified: updatedAt,
     })
   );
   // format the files
   const formattedTrashedFiles = trashedFiles.map(
-    ({ _id, name, size, extension, updatedAt, starred }) => ({
+    ({ _id, name, size, extension, updatedAt, isStarred }) => ({
       id: _id,
       name,
       extension,
-      size,
+      size: size.toString(),
       owner: "me",
-      starred,
+      isStarred,
       isTrashed: true,
       lastModified: updatedAt,
     })

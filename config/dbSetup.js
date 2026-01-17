@@ -85,7 +85,7 @@ try {
           size: {
             bsonType: "long",
           },
-          starred: {
+          isStarred: {
             bsonType: "bool",
           },
           isTrashed: {
@@ -141,7 +141,7 @@ try {
           parentFolderId: {
             bsonType: "objectId",
           },
-          starred: {
+          isStarred: {
             bsonType: "bool",
           },
           isTrashed: {

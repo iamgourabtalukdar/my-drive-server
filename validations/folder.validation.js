@@ -10,7 +10,7 @@ export const getFolderSchema = z.object({
 export const createFolderSchema = z.object({
   body: z.object({
     name: folderNameSchema,
-    parentFolderId: objectIdSchema.optional(),
+    parentFolderId: objectIdSchema.nullable().optional(),
   }),
 });
 
@@ -18,7 +18,7 @@ export const updateFolderSchema = z.object({
   body: z.object({
     name: folderNameSchema.optional(),
     isTrashed: z.boolean().optional(),
-    starred: z.boolean().optional(),
+    isStarred: z.boolean().optional(),
   }),
   params: z.object({
     folderId: objectIdSchema,

@@ -29,7 +29,7 @@ const fileSchema = new Schema(
       ref: "Folder",
       required: true,
     },
-    starred: {
+    isStarred: {
       type: Boolean,
       default: false,
     },

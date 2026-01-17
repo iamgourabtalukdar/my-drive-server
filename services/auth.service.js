@@ -4,6 +4,7 @@ import User from "../models/User.model.js";
 import Session from "../models/Session.model.js";
 import mongoose from "mongoose";
 import Folder from "../models/Folder.model.js";
+import { verifyIdTokenAndGetUser } from "../utils/googleAuth.js";
 
 export async function loginUser({ email, password, ip, userAgent }) {
   const user = await User.findOne({ email }).select("+password name email");
@@ -36,6 +37,83 @@ export async function loginUser({ email, password, ip, userAgent }) {
   const userObj = user.toObject();
   delete userObj.password;
   delete userObj.lastLogin;
+
+  return { user: userObj, sessionId };
+}
+
+export async function loginWithGoogle({ idToken, ip, userAgent }) {
+  const { email, name, picture } = await verifyIdTokenAndGetUser(idToken);
+  const sessionId = crypto.randomUUID();
+  let userObj;
+
+  const user = await User.findOne({ email }).select("_id name email ");
+
+  if (!user) {
+    //create user
+    const mongooseSession = await mongoose.startSession();
+    mongooseSession.startTransaction();
+    try {
+      const userId = new mongoose.Types.ObjectId();
+      const rootFolderId = new mongoose.Types.ObjectId();
+
+      // Using .create() with a session requires passing the documents in an array
+      await User.create(
+        [
+          {
+            _id: userId,
+            name,
+            email,
+            picture,
+            rootFolderId,
+          },
+        ],
+        { session: mongooseSession }
+      );
+      // Using .create() with a session requires passing the documents in an array
+      await Folder.create(
+        [
+          {
+            _id: rootFolderId,
+            name: `root-${userId}`,
+            userId,
+            parentFolderId: null,
+          },
+        ],
+        { session: mongooseSession }
+      );
+
+      await mongooseSession.commitTransaction();
+
+      await Session.create({
+        userId: userId,
+        sessionId,
+        ip,
+        userAgent,
+        device: userAgent,
+      });
+      userObj = { _id: userId, name, email, picture };
+    } catch (error) {
+      console.log(error);
+      await mongooseSession.abortTransaction();
+      throw error;
+    } finally {
+      mongooseSession.endSession();
+    }
+  } else {
+    await Session.deleteMany({ userId: user._id });
+    user.lastLogin = new Date();
+    await user.save();
+
+    await Session.create({
+      userId: user._id,
+      sessionId,
+      ip,
+      userAgent,
+      device: userAgent,
+    });
+    userObj = user.toObject();
+    delete userObj.lastLogin;
+  }
 
   return { user: userObj, sessionId };
 }

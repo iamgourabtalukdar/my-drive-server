@@ -23,7 +23,7 @@ const folderSchema = new Schema(
       type: mongoose.Schema.Types.BigInt,
       default: 0n,
     },
-    starred: {
+    isStarred: {
       type: Boolean,
       default: false,
     },

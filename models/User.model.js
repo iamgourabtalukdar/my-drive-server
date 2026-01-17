@@ -23,7 +23,7 @@ const userSchema = new Schema(
     picture: { type: String },
     storageSize: {
       type: Schema.Types.BigInt,
-      default: 15n * 1024n ** 3n,
+      default: 1n * 1024n ** 3n, // 1 GB
     },
     rootFolderId: {
       type: Schema.ObjectId,

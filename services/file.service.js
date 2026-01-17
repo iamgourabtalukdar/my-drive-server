@@ -182,13 +182,6 @@ export async function uploadComplete({ uploadId, userId }) {
 
     await newFile.save({ session });
 
-    // UPDATE USER STORAGE QUOTA
-    await User.findByIdAndUpdate(
-      userId,
-      { $inc: { storageSize: upload.fileSize } },
-      { session }
-    );
-
     // 6. UPDATE FOLDER SIZE
     await updateFolderSize(upload.parentFolderId, upload.fileSize, session);
 
@@ -212,20 +205,20 @@ export async function getRecentFiles({ userId }) {
     userId,
     isTrashed: false,
   })
-    .select("name size extension userId starred updatedAt")
+    .select("name size extension userId isStarred updatedAt")
     .lean();
 
   const formattedFiles = {};
   foundFiles.forEach(
-    ({ _id, name, size, extension, userId, updatedAt, starred }) => {
+    ({ _id, name, size, extension, userId, updatedAt, isStarred }) => {
       // const owner = String(userId) === String(req.user._id) ? "me" : "other";
       const obj = {
         id: _id,
         name,
         extension,
-        size,
+        size: size.toString(),
         owner: "me",
-        starred,
+        isStarred,
         lastModified: updatedAt,
       };
 
@@ -260,15 +253,15 @@ export async function updateFile({ userId, fileId, updateObj }) {
   if (!file) {
     throw new AppError("File not found or access denied.", 404);
   }
-  const { name, isTrashed, starred } = updateObj;
+  const { name, isTrashed, isStarred } = updateObj;
   if (name !== undefined) {
     file.name = name;
   }
   if (isTrashed !== undefined) {
     file.isTrashed = isTrashed;
   }
-  if (starred !== undefined) {
-    file.starred = starred;
+  if (isStarred !== undefined) {
+    file.isStarred = isStarred;
   }
   await file.save();
 

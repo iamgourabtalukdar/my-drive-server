@@ -6,7 +6,7 @@ export const uploadInitiateSchema = z.object({
     name: fileNameSchema,
     size: z.number().positive("File size must be a positive number"),
     contentType: z.string().nonempty("Content type is required"),
-    parentFolderId: objectIdSchema.optional(),
+    parentFolderId: objectIdSchema.nullable().optional(),
   }),
 });
 
@@ -26,7 +26,7 @@ export const updateFileSchema = z.object({
   body: z.object({
     name: fileNameSchema.optional(),
     isTrashed: z.boolean().optional(),
-    starred: z.boolean().optional(),
+    isStarred: z.boolean().optional(),
   }),
   params: z.object({
     fileId: objectIdSchema,

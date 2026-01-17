@@ -28,24 +28,24 @@ export async function getFolderContent({ userId, folderId }) {
       parentFolderId: folderId,
       isTrashed: false,
     })
-      .select("name starred size updatedAt")
+      .select("name isStarred size updatedAt")
       .lean(),
     File.find({
       userId,
       parentFolderId: folderId,
       isTrashed: false,
     })
-      .select("name extension size starred updatedAt")
+      .select("name extension size isStarred updatedAt")
       .lean(),
   ]);
 
   // 3. Format the results for the client. This logic remains the same.
   const formattedNestedFolders = nestedFolders.map(
-    ({ _id, name, starred, size, updatedAt }) => ({
+    ({ _id, name, isStarred, size, updatedAt }) => ({
       id: _id,
       name,
       owner: "me",
-      isStarred: starred,
+      isStarred,
       isTrashed: false,
       size: size.toString(),
       lastModified: updatedAt,
@@ -53,13 +53,13 @@ export async function getFolderContent({ userId, folderId }) {
   );
 
   const formattedNestedFiles = nestedFiles.map(
-    ({ _id, name, extension, size, starred, updatedAt }) => ({
+    ({ _id, name, extension, size, isStarred, updatedAt }) => ({
       id: _id,
       name,
       extension,
-      size,
+      size: size.toString(),
       owner: "me",
-      isStarred: starred,
+      isStarred,
       isTrashed: false,
       lastModified: updatedAt,
     })
@@ -100,15 +100,15 @@ export async function updateFolder({ userId, folderId, updateObj }) {
   } else if (folder.parentFolderId === null) {
     throw new AppError("Cannot update the root folder.", 400);
   }
-  const { name, isTrashed, starred } = updateObj;
+  const { name, isTrashed, isStarred } = updateObj;
   if (name !== undefined) {
     folder.name = name;
   }
   if (isTrashed !== undefined) {
     folder.isTrashed = isTrashed;
   }
-  if (starred !== undefined) {
-    folder.starred = starred;
+  if (isStarred !== undefined) {
+    folder.isStarred = isStarred;
   }
   await folder.save();
 
