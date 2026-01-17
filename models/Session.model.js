@@ -24,9 +24,9 @@ const sessionSchema = new Schema(
     },
 
     device: {
-      type: String,
-      os: String,
-      browser: String,
+      type: { type: String },
+      os: { type: String },
+      browser: { type: String },
     },
 
     lastActiveAt: {
