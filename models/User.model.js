@@ -27,9 +27,19 @@ const userSchema = new Schema(
     },
     rootFolderId: {
       type: Schema.ObjectId,
-      required: true,
       ref: "Folder",
-      default: null,
+    },
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerifiedAt: {
+      type: Date,
+    },
+    registeredUsing: {
+      type: String,
+      enum: ["google", "standard"],
+      default: "standard",
     },
     lastLogin: {
       type: Date,
@@ -41,7 +51,7 @@ const userSchema = new Schema(
     timestamps: true,
     toJSON: { transform: mongooseTransform },
     toObject: { transform: mongooseTransform },
-  }
+  },
 );
 
 const User = model("User", userSchema);

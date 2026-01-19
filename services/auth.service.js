@@ -5,12 +5,20 @@ import Session from "../models/Session.model.js";
 import mongoose from "mongoose";
 import Folder from "../models/Folder.model.js";
 import { verifyIdTokenAndGetUser } from "../utils/googleAuth.js";
+import { createEmailOtp } from "./otp.service.js";
+import { sendVerificationEmail } from "./mail.service.js";
+import { EMAIL_VERIFICATION_OTP_EXPIRY_MINUTES } from "../config/constants.js";
 
 export async function loginUser({ email, password, ip, userAgent, device }) {
-  const user = await User.findOne({ email }).select("+password name email");
+  const user = await User.findOne({ email }).select(
+    "+password name email isEmailVerified",
+  );
 
   if (!user) {
     throw new AppError("Invalid credentials", 401);
+  }
+  if (!user.isEmailVerified) {
+    throw new AppError("Email not verified.", 403, "NOT_VERIFIED");
   }
 
   const isMatch = await bcrypt.compare(password, user.password);
@@ -46,7 +54,7 @@ export async function loginWithGoogle({ idToken, ip, userAgent, device }) {
   const sessionId = crypto.randomUUID();
   let userObj;
 
-  const user = await User.findOne({ email }).select("_id name email ");
+  const user = await User.findOne({ email }).select("_id name email");
 
   if (!user) {
     //create user
@@ -65,6 +73,9 @@ export async function loginWithGoogle({ idToken, ip, userAgent, device }) {
             email,
             picture,
             rootFolderId,
+            isEmailVerified: true,
+            emailVerifiedAt: new Date(),
+            registeredUsing: "google",
           },
         ],
         { session: mongooseSession },
@@ -93,7 +104,6 @@ export async function loginWithGoogle({ idToken, ip, userAgent, device }) {
       });
       userObj = { _id: userId, name, email, picture };
     } catch (error) {
-      console.log(error);
       await mongooseSession.abortTransaction();
       throw error;
     } finally {
@@ -122,47 +132,36 @@ export async function registerUser({ name, email, password }) {
   const existingUser = await User.findOne({ email }).lean();
 
   if (existingUser) {
-    throw new AppError("Email already in use", 400);
+    if (!existingUser.isEmailVerified) {
+      throw new AppError("Email not verified.", 403, "NOT_VERIFIED");
+    }
+    throw new AppError("Email already exists", 409);
   }
+
   const userId = new mongoose.Types.ObjectId();
-  const rootFolderId = new mongoose.Types.ObjectId();
   const hashedPassword = await bcrypt.hash(password, 12);
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  try {
-    // Using .create() with a session requires passing the documents in an array
-    await User.create(
-      [
-        {
-          _id: userId,
-          name,
-          email,
-          password: hashedPassword,
-          rootFolderId,
-        },
-      ],
-      { session },
-    );
-    // Using .create() with a session requires passing the documents in an array
-    await Folder.create(
-      [
-        {
-          _id: rootFolderId,
-          name: `root-${userId}`,
-          userId,
-          parentFolderId: null,
-        },
-      ],
-      { session },
-    );
-    await session.commitTransaction();
-    return { name, email };
-  } catch (err) {
-    await session.abortTransaction();
-    throw err;
-  } finally {
-    session.endSession();
-  }
+
+  await User.create({
+    _id: userId,
+    name,
+    email,
+    password: hashedPassword,
+    registeredUsing: "standard",
+  });
+
+  // send otp for email verification
+  const otp = await createEmailOtp({
+    userId,
+    purpose: "email_verification",
+    expiryMinutes: EMAIL_VERIFICATION_OTP_EXPIRY_MINUTES,
+  });
+  await sendVerificationEmail({
+    name,
+    email,
+    otp,
+    expiryMinutes: EMAIL_VERIFICATION_OTP_EXPIRY_MINUTES,
+  });
+  return { name, email };
 }
 
 export async function logoutUser({ sessionId }) {

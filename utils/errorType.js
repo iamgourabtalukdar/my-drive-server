@@ -14,6 +14,8 @@ export function errorType(errorCode) {
       return "FORBIDDEN";
     case 404:
       return "NOT_FOUND";
+    case 409:
+      return "CONFLICT";
     case 500:
       return "INTERNAL_SERVER_ERROR";
     case 503:

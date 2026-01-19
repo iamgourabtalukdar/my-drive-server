@@ -6,6 +6,19 @@ import { getInnerFilesFolders, updateFolderSize } from "../utils/utils.js";
 import s3Client from "../utils/s3Client.js";
 import { DeleteObjectsCommand } from "@aws-sdk/client-s3";
 
+export async function createRootFolder({ userId, session }) {
+  const rootFolder = await Folder.create(
+    [
+      {
+        name: `root-${userId}`,
+        userId,
+        parentFolderId: null,
+      },
+    ],
+    { session },
+  );
+  return rootFolder[0];
+}
 export async function getFolderContent({ userId, folderId }) {
   const folder = await Folder.findOne({
     _id: folderId,
@@ -49,7 +62,7 @@ export async function getFolderContent({ userId, folderId }) {
       isTrashed: false,
       size: size.toString(),
       lastModified: updatedAt,
-    })
+    }),
   );
 
   const formattedNestedFiles = nestedFiles.map(
@@ -62,7 +75,7 @@ export async function getFolderContent({ userId, folderId }) {
       isStarred,
       isTrashed: false,
       lastModified: updatedAt,
-    })
+    }),
   );
 
   return { folders: formattedNestedFolders, files: formattedNestedFiles };
@@ -150,11 +163,11 @@ export async function deleteFolder({ userId, folderId }) {
   try {
     await Folder.deleteMany(
       { _id: { $in: folders.map((folder) => folder._id) } },
-      { session }
+      { session },
     );
     await File.deleteMany(
       { _id: { $in: files.map((file) => file._id) } },
-      { session }
+      { session },
     );
 
     if (foundFolder.size > 0) {
@@ -162,7 +175,7 @@ export async function deleteFolder({ userId, folderId }) {
       await updateFolderSize(
         foundFolder.parentFolderId,
         -foundFolder.size,
-        session
+        session,
       );
     }
 

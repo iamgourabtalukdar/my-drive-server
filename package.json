@@ -23,6 +23,7 @@
     "mime-types": "^3.0.2",
     "mongoose": "^8.13.2",
     "multer": "^1.4.5-lts.2",
+    "resend": "^6.7.0",
     "ua-parser-js": "^2.0.8",
     "uuid": "^13.0.0",
     "zod": "^4.1.12"

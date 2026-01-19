@@ -16,10 +16,16 @@ export async function authMiddleware(req, res, next) {
     return next(new AppError("Session expired", 401));
   }
 
+  const user = session.userId;
+
+  if (!user.isEmailVerified) {
+    return next(new AppError("Email not verified.", 403, "NOT_VERIFIED"));
+  }
+
   session.lastActiveAt = new Date();
   await session.save();
 
-  req.user = session.userId;
+  req.user = user;
   req.session = session;
 
   next();

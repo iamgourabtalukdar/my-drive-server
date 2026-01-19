@@ -1,13 +1,17 @@
 import { errorType } from "./errorType.js";
 
 class AppError extends Error {
-  constructor(message, statusCode, fields = null) {
+  constructor(message, statusCode, type = null, extraFields = null) {
     super(message);
     this.statusCode = statusCode;
-    this.type = errorType(statusCode);
+    if (type) {
+      this.type = type;
+    } else {
+      this.type = errorType(statusCode);
+    }
 
-    if (fields) {
-      this.fields = fields;
+    if (extraFields) {
+      this.fields = extraFields;
     }
 
     Error.captureStackTrace(this, this.constructor);
